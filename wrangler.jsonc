@@ -7,7 +7,10 @@
   "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
   "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "shen" }],
   "images": { "binding": "IMAGES" },
-  // KV створюється автоматично під час першого деплою.
-  "kv_namespaces": [{ "binding": "NEXT_INC_CACHE_KV" }, { "binding": "NEXT_TAG_CACHE_KV" }],
+  // Сховища KV у Cloudflare: shen-page-cache і shen-tag-cache.
+  "kv_namespaces": [
+    { "binding": "NEXT_INC_CACHE_KV", "id": "d2cb38192df84445bda4123c0e8b341a" },
+    { "binding": "NEXT_TAG_CACHE_KV", "id": "b554a1b707e54a2aba5d3964366976aa" }
+  ],
   "observability": { "enabled": true }
 }

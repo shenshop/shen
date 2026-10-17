@@ -52,7 +52,7 @@ npm run dev                  # http://localhost:3000
 3. Settings → Variables and Secrets: додати ключі з `.env.example`.
 4. Settings → Domains & Routes → Add custom domain → `shen-shop.com.ua`.
 
-Сховище кешу KV створюється автоматично під час першого деплою.
+Сховища кешу KV (shen-page-cache, shen-tag-cache) вже створені, їхні ID записані в `wrangler.jsonc`.
 Локальна перевірка Cloudflare-збірки: `npm run preview`.
 
 Сайт також працює на Vercel без змін (`next build`).
