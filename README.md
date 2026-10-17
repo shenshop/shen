@@ -48,7 +48,7 @@ npm run dev                  # http://localhost:3000
 Основний варіант: **Cloudflare Workers, безкоштовний тариф** (100 000 запитів на день, комерційне використання дозволене).
 
 1. dash.cloudflare.com → Workers & Pages → Create → Import a repository → `shenshop/shen`.
-2. Build command: `npx opennextjs-cloudflare build`, Deploy command: `npx opennextjs-cloudflare deploy`.
+2. Команди лишити стандартні: Build `npm run build`, Deploy `npx wrangler deploy` (скрипт збірки сам бачить Cloudflare).
 3. Settings → Variables and Secrets: додати ключі з `.env.example`.
 4. Settings → Domains & Routes → Add custom domain → `shen-shop.com.ua`.
 
