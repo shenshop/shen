@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shen",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "shen" }],
+  "images": { "binding": "IMAGES" },
+  // KV створюється автоматично під час першого деплою.
+  "kv_namespaces": [{ "binding": "NEXT_INC_CACHE_KV" }, { "binding": "NEXT_TAG_CACHE_KV" }],
+  "observability": { "enabled": true }
+}

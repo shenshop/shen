@@ -10,7 +10,7 @@ Next.js-сайт: каталог, сторінка товару, корзина,
 2. Назва, опис, категорія, фото (перше фото стає головним).
 3. Варіанти: властивість **«Розмір»** (36, 37, 38…), ціна і залишок для кожного.
 4. Стара ціна для знижки: користувацьке поле товару «Стара ціна».
-5. Збережіть. Протягом 5 хвилин товар зʼявиться на сайті. Щоб одразу: відкрити `/api/revalidate?secret=ВАШ_СЕКРЕТ`.
+5. Збережіть. Протягом години товар зʼявиться на сайті. Щоб одразу: відкрити `/api/revalidate?secret=ВАШ_СЕКРЕТ`.
 
 Товар без фото або без жодного варіанта на сайт не потрапляє. Архівні товари ховаються.
 Моделі для реклами на головній: `FEATURED_PRODUCT_IDS=101,103,201` (ID товарів у KeyCRM).
@@ -45,4 +45,14 @@ npm run dev                  # http://localhost:3000
 
 ## Хостинг
 
-Звичайний Next.js: Vercel, Netlify або власний VPS (`npm run build && npm start`).
+Основний варіант: **Cloudflare Workers, безкоштовний тариф** (100 000 запитів на день, комерційне використання дозволене).
+
+1. dash.cloudflare.com → Workers & Pages → Create → Import a repository → `shenshop/shen`.
+2. Build command: `npx opennextjs-cloudflare build`, Deploy command: `npx opennextjs-cloudflare deploy`.
+3. Settings → Variables and Secrets: додати ключі з `.env.example`.
+4. Settings → Domains & Routes → Add custom domain → `shen-shop.com.ua`.
+
+Сховище кешу KV створюється автоматично під час першого деплою.
+Локальна перевірка Cloudflare-збірки: `npm run preview`.
+
+Сайт також працює на Vercel без змін (`next build`).
