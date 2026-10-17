@@ -6,7 +6,7 @@ import { useCart } from "./cart";
 import { BagIcon, CloseIcon, MenuIcon } from "./icons";
 import type { Category } from "@/lib/types";
 
-export function Header({ categories }: { categories: Category[] }) {
+export function Header({ categories, shopName, contacts }: { categories: Category[]; shopName: string; contacts: React.ReactNode }) {
   const { count, setOpen } = useCart();
   const [menu, setMenu] = useState(false);
   const roots = categories.filter((c) => c.parentId == null);
@@ -17,8 +17,8 @@ export function Header({ categories }: { categories: Category[] }) {
         <button className="icon-btn only-mobile" onClick={() => setMenu(true)} aria-label="Меню">
           <MenuIcon />
         </button>
-        <Link href="/" className="logo" aria-label="SHEN на головну">
-          SHEN
+        <Link href="/" className="logo" aria-label="На головну">
+          {shopName}
         </Link>
         <nav className="nav only-desktop">
           {roots.map((c) => (
@@ -39,7 +39,7 @@ export function Header({ categories }: { categories: Category[] }) {
         <div className="sheet-backdrop" onClick={() => setMenu(false)}>
           <aside className="sheet sheet-left" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-head">
-              <span className="logo">SHEN</span>
+              <span className="logo">{shopName}</span>
               <button className="icon-btn" onClick={() => setMenu(false)} aria-label="Закрити">
                 <CloseIcon />
               </button>
@@ -63,6 +63,7 @@ export function Header({ categories }: { categories: Category[] }) {
               <Link href="/#vidguky">Відгуки</Link>
               <Link href="/#kontakty">Звʼязок</Link>
             </nav>
+            {contacts}
           </aside>
         </div>
       )}

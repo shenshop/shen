@@ -6,6 +6,8 @@ import { Header } from "@/components/header";
 import { CartDrawer } from "@/components/cart-drawer";
 import { Analytics } from "@/components/analytics";
 import { getCatalog } from "@/lib/catalog";
+import { Contacts } from "@/components/contacts";
+import { settings } from "@/data/settings";
 
 const font = Manrope({ subsets: ["latin", "cyrillic"], display: "swap", variable: "--font" });
 
@@ -17,30 +19,23 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = { themeColor: "#faf8f5", width: "device-width", initialScale: 1 };
 
-const phone = process.env.NEXT_PUBLIC_PHONE ?? "+380738113785";
-
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { categories } = await getCatalog();
   return (
     <html lang="uk" className={font.variable}>
       <body>
         <CartProvider>
-          <Header categories={categories} />
+          <Header categories={categories} shopName={settings.shopName} contacts={<Contacts />} />
           <main>{children}</main>
           <footer className="footer" id="kontakty">
             <div className="container footer-inner">
               <div>
-                <p className="logo">SHEN</p>
+                <p className="logo">{settings.shopName}</p>
                 <p className="muted">Взуття з натуральної шкіри</p>
               </div>
-              <div className="footer-contacts">
-                <a href={`tel:${phone}`}>{phone.replace(/^\+38(\d{3})(\d{3})(\d{2})(\d{2})$/, "+38 $1 $2 $3 $4")}</a>
-                <a href={`viber://chat?number=${encodeURIComponent(phone)}`}>Viber</a>
-                <a href="https://t.me/" rel="noopener">Telegram</a>
-                <a href="https://instagram.com/" rel="noopener">Instagram</a>
-              </div>
+              <Contacts />
             </div>
-            <div className="container muted small">© {new Date().getFullYear()} SHEN</div>
+            <div className="container muted small">© {new Date().getFullYear()} {settings.shopName}</div>
           </footer>
           <CartDrawer />
         </CartProvider>
