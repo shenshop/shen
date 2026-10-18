@@ -145,12 +145,23 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
     // Ховаємо товари без фото, без розмірів і з нульовою ціною.
     .filter((p) => p.images.length > 0 && p.price > 0 && p.variants.length > 0);
 
-  const categories: Category[] = kCategories.map((c) => ({
-    id: c.id,
-    name: c.name,
-    slug: `${c.id}-${slugify(c.name)}`,
-    parentId: c.parent_id,
-  }));
+  // Показуємо лише категорії, де є товари на сайті (самі або в підкатегоріях).
+  const used = new Set<number>();
+  for (const p of products) {
+    let id = p.categoryId;
+    while (id != null && !used.has(id)) {
+      used.add(id);
+      id = kCategories.find((c) => c.id === id)?.parent_id ?? null;
+    }
+  }
+  const categories: Category[] = kCategories
+    .filter((c) => used.has(c.id))
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: `${c.id}-${slugify(c.name)}`,
+      parentId: c.parent_id,
+    }));
 
   return { products, categories };
 }
