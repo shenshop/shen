@@ -119,7 +119,8 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
         variants,
       };
     })
-    .filter((p) => p.images.length > 0 && p.variants.length > 0);
+    // Ховаємо товари без фото, без ціни та ті, яких немає в наявності в жодному розмірі.
+    .filter((p) => p.images.length > 0 && p.price > 0 && p.variants.some((v) => v.inStock));
 
   const categories: Category[] = kCategories.map((c) => ({
     id: c.id,
