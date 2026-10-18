@@ -5,7 +5,7 @@ import { idFromSlug } from "@/lib/slug";
 import { ProductCard } from "@/components/product-card";
 import { CategoryChips } from "@/components/category-chips";
 
-export const revalidate = 900;
+export const revalidate = 3600;
 
 type Props = { params: Promise<{ category: string }> };
 

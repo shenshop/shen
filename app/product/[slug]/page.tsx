@@ -8,7 +8,7 @@ import { Benefits } from "@/components/benefits";
 import { ProductCard } from "@/components/product-card";
 import { formatPrice } from "@/lib/format";
 
-export const revalidate = 900;
+export const revalidate = 3600;
 
 type Props = { params: Promise<{ slug: string }> };
 

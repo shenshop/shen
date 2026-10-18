@@ -4,7 +4,7 @@ import { getCatalog, getFeatured } from "@/lib/catalog";
 import { ProductCard } from "@/components/product-card";
 import { Benefits } from "@/components/benefits";
 
-export const revalidate = 900;
+export const revalidate = 3600;
 
 const reviews = [
   { name: "Олена, Київ", text: "Черевики прийшли за день, шкіра справжня, сидять ідеально. Беру вже другу пару." },
