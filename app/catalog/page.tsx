@@ -3,7 +3,7 @@ import { getCatalog } from "@/lib/catalog";
 import { ProductCard } from "@/components/product-card";
 import { CategoryChips } from "@/components/category-chips";
 
-export const revalidate = 3600;
+export const revalidate = 900;
 export const metadata: Metadata = { title: "Каталог" };
 
 export default async function CatalogPage() {

@@ -4,7 +4,7 @@ import { productSlug, slugify } from "./slug";
 
 const BASE = "https://openapi.keycrm.app/v1";
 // Година: вкладається в безкоштовний ліміт записів Cloudflare KV. Для миттєвого оновлення є /api/revalidate.
-const REVALIDATE_SECONDS = 3600;
+const REVALIDATE_SECONDS = 900;
 
 export const keycrmEnabled = () => Boolean(process.env.KEYCRM_API_KEY);
 
