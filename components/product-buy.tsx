@@ -67,9 +67,6 @@ export function ProductBuy({ product }: { product: Product }) {
         ))}
       </div>
       {error && <p className="error-text">Оберіть розмір</p>}
-      {variant && variant.readyToShip === false && (
-        <p className="muted small">Розмір під замовлення: відправимо через 1–3 дні</p>
-      )}
 
       <div className="buy-actions">
         <button className="btn btn-dark btn-block" onClick={() => addToCart(true)}>

@@ -71,6 +71,13 @@ function stripHtml(html: string): string {
   return html.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<[^>]+>/g, "").trim();
 }
 
+// Перемикач «На сайт» у картці товару KeyCRM (користувацьке поле CT_1006).
+function onSite(p: KProduct): boolean {
+  const field = p.custom_fields?.find((f) => f.uuid === "CT_1006" || /на\s*сайт/i.test(f.name ?? ""));
+  const v = field?.value;
+  return v != null && v !== false && v !== 0 && v !== "" && v !== "0" && v !== "false";
+}
+
 function oldPriceFrom(p: KProduct): number | null {
   const field = p.custom_fields?.find((f) => /стара\s*ціна|old\s*price/i.test(f.name ?? ""));
   const value = Number(field?.value);
@@ -91,7 +98,11 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
     offersByProduct.set(o.product_id, list);
   }
 
-  const products: Product[] = kProducts
+  // Якщо хоч один товар позначено «На сайт», показуємо тільки позначені; інакше всі.
+  const selected = kProducts.filter(onSite);
+  const visible = selected.length > 0 ? selected : kProducts;
+
+  const products: Product[] = visible
     .filter((p) => !p.is_archived)
     .map((p) => {
       const variants: Variant[] = (offersByProduct.get(p.id) ?? []).map((o) => {
@@ -99,10 +110,8 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
           o.properties?.find((pr) => /розмір|size/i.test(pr.name))?.value ??
           o.properties?.map((pr) => pr.value).join(" / ") ??
           "";
-        const available = (o.quantity ?? 0) - (o.in_reserve ?? 0);
-        // Товар береться під замовлення, тому кожен розмір можна купити; залишок лише показує, чи він уже на складі.
-        const readyToShip = o.quantity == null || available > 0;
-        return { id: o.id, sku: o.sku, size, price: o.price, inStock: true, readyToShip };
+        // Товар береться під замовлення (1–3 дні), тому кожен розмір можна купити незалежно від залишку.
+        return { id: o.id, sku: o.sku, size, price: o.price, inStock: true };
       });
       variants.sort((a, b) => parseFloat(a.size) - parseFloat(b.size) || a.size.localeCompare(b.size));
       const images = [p.thumbnail_url, ...(p.attachments_data ?? [])].filter(
