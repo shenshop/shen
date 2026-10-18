@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCart } from "./cart";
 import { getUtm, track } from "./analytics";
 import { CloseIcon } from "./icons";
@@ -22,6 +22,10 @@ export function ProductBuy({ product }: { product: Product }) {
   const [quick, setQuick] = useState(false);
   const [guide, setGuide] = useState(false);
   const variant = product.variants.find((v) => v.id === variantId) ?? null;
+
+  useEffect(() => {
+    track("ViewContent", { content_ids: product.variants.map((v) => v.sku), content_name: product.name, content_type: "product", value: product.price, currency: "UAH" });
+  }, [product]);
 
   const requireSize = () => {
     if (variant) return variant;

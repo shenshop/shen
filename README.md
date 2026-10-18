@@ -36,7 +36,7 @@ npm run dev                  # http://localhost:3000
 - `KEYCRM_SOURCE_ID`: ID джерела «Сайт» (KeyCRM → Налаштування → Джерела).
 - `KEYCRM_NOVAPOSHTA_ID`, `KEYCRM_UKRPOSHTA_ID`: ID служб доставки в KeyCRM (`GET /order/delivery-service`).
 - `NOVAPOSHTA_API_KEY`: кабінет Нової Пошти → Налаштування → Безпека.
-- `NEXT_PUBLIC_FB_PIXEL_ID`: Facebook Events Manager.
+- Facebook Pixel ID: у `data/settings.ts` (поле `facebookPixelId`). Події: PageView, ViewContent, AddToCart, InitiateCheckout, Purchase.
 
 ## Як працює замовлення
 

@@ -26,4 +26,7 @@ export const settings = {
   viber: "+380738113785", // номер у Viber
   telegram: "", // нікнейм без @, наприклад: shen_shop
   whatsapp: "", // номер у WhatsApp, наприклад: +380738113785
+
+  // Facebook Pixel (Events Manager → Джерела даних). Порожньо = піксель вимкнено.
+  facebookPixelId: "466130628984714",
 };

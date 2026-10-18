@@ -4,7 +4,7 @@ import "./globals.css";
 import { CartProvider } from "@/components/cart";
 import { Header } from "@/components/header";
 import { CartDrawer } from "@/components/cart-drawer";
-import { Analytics } from "@/components/analytics";
+import { Analytics, PixelScript } from "@/components/analytics";
 import { getCatalog } from "@/lib/catalog";
 import { Contacts } from "@/components/contacts";
 import { settings } from "@/data/settings";
@@ -24,6 +24,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="uk" className={font.variable}>
       <body>
+        <PixelScript />
         <CartProvider>
           <Header categories={categories} shopName={settings.shopName} contacts={<Contacts />} />
           <main>{children}</main>
