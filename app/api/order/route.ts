@@ -3,6 +3,7 @@ import { getCatalog } from "@/lib/catalog";
 import { createOrder, keycrmEnabled } from "@/lib/keycrm";
 import { normalizePhone } from "@/lib/format";
 import type { OrderRequest } from "@/lib/types";
+import { itemName } from "@/lib/variants";
 
 const bad = (message: string) => NextResponse.json({ error: message }, { status: 400 });
 
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
     const quantity = Math.max(1, Math.min(10, Math.floor(Number(item.quantity) || 1)));
     items.push({
       sku: found.variant.sku,
-      name: found.product.name,
+      name: itemName(found.product, found.variant),
       size: found.variant.size,
       price: found.variant.price,
       quantity,

@@ -106,12 +106,13 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
     .filter((p) => !p.is_archived)
     .map((p) => {
       const variants: Variant[] = (offersByProduct.get(p.id) ?? []).map((o) => {
+        const color = o.properties?.find((pr) => /колір|цвет|color/i.test(pr.name))?.value;
         const size =
           o.properties?.find((pr) => /розмір|size/i.test(pr.name))?.value ??
-          o.properties?.map((pr) => pr.value).join(" / ") ??
+          o.properties?.filter((pr) => !/колір|цвет|color/i.test(pr.name)).map((pr) => pr.value).join(" / ") ??
           "";
         // Товар береться під замовлення (1–3 дні), тому кожен розмір можна купити незалежно від залишку.
-        return { id: o.id, sku: o.sku, size, price: o.price, inStock: true };
+        return { id: o.id, sku: o.sku, size, color, price: o.price, inStock: true };
       });
       variants.sort((a, b) => parseFloat(a.size) - parseFloat(b.size) || a.size.localeCompare(b.size));
       const images = [p.thumbnail_url, ...(p.attachments_data ?? [])].filter(

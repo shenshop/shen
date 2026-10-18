@@ -9,6 +9,8 @@ export type Variant = {
   id: number;
   sku: string;
   size: string;
+  /** Колір, якщо модель є в кількох кольорах (властивість «Колір» у KeyCRM). */
+  color?: string;
   price: number;
   inStock: boolean;
 };
