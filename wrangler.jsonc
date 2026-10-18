@@ -12,10 +12,10 @@
     { "binding": "NEXT_INC_CACHE_KV", "id": "d2cb38192df84445bda4123c0e8b341a" },
     { "binding": "NEXT_TAG_CACHE_KV", "id": "b554a1b707e54a2aba5d3964366976aa" }
   ],
-  // Номери з KeyCRM: джерело SHEN-SHOP, служби доставки «НП» та «Укрпошта ФОП».
+  // Номери з KeyCRM: джерело «Сайт 2», служби доставки «НП» та «Укрпошта ФОП».
   // Ключ KEYCRM_API_KEY зберігається як секрет у Cloudflare, не тут.
   "vars": {
-    "KEYCRM_SOURCE_ID": "5",
+    "KEYCRM_SOURCE_ID": "13",
     "KEYCRM_NOVAPOSHTA_ID": "4",
     "KEYCRM_UKRPOSHTA_ID": "3"
   },
