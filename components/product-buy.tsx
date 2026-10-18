@@ -133,7 +133,7 @@ export function ProductBuy({ product }: { product: Product }) {
   );
 }
 
-function QuickOrder({ product, variant, onClose }: { product: Product; variant: Product["variants"][number]; onClose: () => void }) {
+export function QuickOrder({ product, variant, onClose }: { product: Product; variant: Product["variants"][number]; onClose: () => void }) {
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
