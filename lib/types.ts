@@ -11,6 +11,8 @@ export type Variant = {
   size: string;
   price: number;
   inStock: boolean;
+  /** false: розміру немає на складі, привеземо під замовлення за 1–3 дні. */
+  readyToShip?: boolean;
 };
 
 export type Product = {

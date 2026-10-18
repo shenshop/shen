@@ -100,7 +100,9 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
           o.properties?.map((pr) => pr.value).join(" / ") ??
           "";
         const available = (o.quantity ?? 0) - (o.in_reserve ?? 0);
-        return { id: o.id, sku: o.sku, size, price: o.price, inStock: o.quantity == null || available > 0 };
+        // Товар береться під замовлення, тому кожен розмір можна купити; залишок лише показує, чи він уже на складі.
+        const readyToShip = o.quantity == null || available > 0;
+        return { id: o.id, sku: o.sku, size, price: o.price, inStock: true, readyToShip };
       });
       variants.sort((a, b) => parseFloat(a.size) - parseFloat(b.size) || a.size.localeCompare(b.size));
       const images = [p.thumbnail_url, ...(p.attachments_data ?? [])].filter(
@@ -119,8 +121,8 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
         variants,
       };
     })
-    // Ховаємо товари без фото, без ціни та ті, яких немає в наявності в жодному розмірі.
-    .filter((p) => p.images.length > 0 && p.price > 0 && p.variants.some((v) => v.inStock));
+    // Ховаємо товари без фото, без розмірів і з нульовою ціною.
+    .filter((p) => p.images.length > 0 && p.price > 0 && p.variants.length > 0);
 
   const categories: Category[] = kCategories.map((c) => ({
     id: c.id,
