@@ -33,8 +33,9 @@ npm run dev                  # http://localhost:3000
 ## Звідки брати ключі
 
 - `KEYCRM_API_KEY`: KeyCRM → Налаштування → API.
-- `KEYCRM_SOURCE_ID`: ID джерела «Сайт» (KeyCRM → Налаштування → Джерела).
-- `KEYCRM_NOVAPOSHTA_ID`, `KEYCRM_UKRPOSHTA_ID`: ID служб доставки в KeyCRM (`GET /order/delivery-service`).
+- `KEYCRM_SOURCE_ID`: ID джерела «Сайт 2» (зараз 13).
+- `KEYCRM_NOVAPOSHTA_ID`, `KEYCRM_UKRPOSHTA_ID`: ID служб доставки «НП» (4) та «Укрпошта ФОП» (3).
+- Ці три номери записані у `wrangler.jsonc` → `vars`. Ключ `KEYCRM_API_KEY` лежить у Cloudflare як секрет: і для роботи сайту, і для збірки.
 - `NOVAPOSHTA_API_KEY`: кабінет Нової Пошти → Налаштування → Безпека.
 - Facebook Pixel ID: у `data/settings.ts` (поле `facebookPixelId`). Події: PageView, ViewContent, AddToCart, InitiateCheckout, Purchase.
 
