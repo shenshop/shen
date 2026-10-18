@@ -5,16 +5,12 @@ import { useEffect, useState } from "react";
 import { useCart } from "./cart";
 import { getUtm, track } from "./analytics";
 import { CloseIcon } from "./icons";
+import { sizeChartFor } from "@/data/sizes";
 import { formatPrice } from "@/lib/format";
 import type { Product } from "@/lib/types";
 import { colorImage, colorsOf, defaultColor, itemName } from "@/lib/variants";
 import { ColorPicker } from "./color-picker";
 
-// Орієнтовна довжина стопи для європейської розмірної сітки.
-const footLength: Record<string, string> = {
-  "35": "22.5", "36": "23", "37": "23.5–24", "38": "24.5", "39": "25", "40": "25.5–26",
-  "41": "26.5", "42": "27", "43": "27.5–28", "44": "28.5", "45": "29", "46": "29.5–30",
-};
 
 export function ProductBuy({ product }: { product: Product }) {
   const { add, setOpen } = useCart();
@@ -24,6 +20,8 @@ export function ProductBuy({ product }: { product: Product }) {
   const [quick, setQuick] = useState(false);
   const [guide, setGuide] = useState(false);
   const colors = colorsOf(product);
+  const insole = sizeChartFor(product.name);
+  const sizes = [...new Set(product.variants.map((v) => v.size))];
   const [color, setColor] = useState(() => defaultColor(product));
   const shown = colors.length ? product.variants.filter((v) => v.color === color) : product.variants;
   const variant = product.variants.find((v) => v.id === variantId) ?? null;
@@ -123,19 +121,19 @@ export function ProductBuy({ product }: { product: Product }) {
                 <CloseIcon />
               </button>
             </div>
-            <p className="muted small">Поставте стопу на аркуш паперу, обведіть і виміряйте від пʼятки до найдовшого пальця.</p>
+            <p className="muted small">Модель повномірна: беріть свій звичайний розмір.</p>
             <table className="size-table">
               <thead>
                 <tr>
                   <th>Розмір</th>
-                  <th>Довжина стопи, см</th>
+                  <th>Довжина устілки, см</th>
                 </tr>
               </thead>
               <tbody>
-                {product.variants.map((v) => (
-                  <tr key={v.id}>
-                    <td>{v.size}</td>
-                    <td>{footLength[v.size] ?? "—"}</td>
+                {sizes.map((s) => (
+                  <tr key={s}>
+                    <td>{s}</td>
+                    <td>{insole[s] ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
