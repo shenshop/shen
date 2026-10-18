@@ -3,7 +3,7 @@ import type { Category, OrderRequest, Product, Variant } from "./types";
 import { productSlug, slugify } from "./slug";
 
 const BASE = "https://openapi.keycrm.app/v1";
-// Година: вкладається в безкоштовний ліміт записів Cloudflare KV. Для миттєвого оновлення є /api/revalidate.
+// 15 хвилин: вкладається в безкоштовний ліміт записів Cloudflare KV. Для миттєвого оновлення є /api/revalidate.
 const REVALIDATE_SECONDS = 900;
 
 export const keycrmEnabled = () => Boolean(process.env.KEYCRM_API_KEY);
@@ -86,7 +86,7 @@ function oldPriceFrom(p: KProduct): number | null {
 
 export async function fetchCatalog(): Promise<{ products: Product[]; categories: Category[] }> {
   const [kProducts, kOffers, kCategories] = await Promise.all([
-    all<KProduct>("/products?include=custom_fields&filter[is_archived]=false"),
+    all<KProduct>("/products?filter[is_archived]=false&include=custom_fields"),
     all<KOffer>("/offers?filter[is_archived]=false"),
     all<KCategory>("/products/categories"),
   ]);
