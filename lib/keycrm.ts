@@ -86,6 +86,13 @@ function oldPriceFrom(p: KProduct): number | null {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
+// Поле «Вартість зі знижкою»: нова ціна для всіх розмірів, звичайна ціна стає закресленою.
+function salePriceFrom(p: KProduct): number | null {
+  const field = p.custom_fields?.find((f) => /зі\s*знижкою|sale\s*price/i.test(f.name ?? ""));
+  const value = Number(field?.value);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export async function fetchCatalog(): Promise<{ products: Product[]; categories: Category[] }> {
   const [kProducts, kOffers, kCategories] = await Promise.all([
     all<KProduct>("/products?filter[is_archived]=false&include=custom_fields"),
@@ -129,8 +136,12 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
         if (full) v.image = full;
         else images.push(v.image);
       }
-      const price = variants.length ? Math.min(...variants.map((v) => v.price)) : (p.min_price ?? p.price ?? 0);
-      const oldPrice = oldPriceFrom(p);
+      const regular = variants.length ? Math.min(...variants.map((v) => v.price)) : (p.min_price ?? p.price ?? 0);
+      const sale = salePriceFrom(p);
+      const onSale = sale != null && sale < regular;
+      if (onSale) for (const v of variants) v.price = Math.min(v.price, sale);
+      const price = onSale ? sale : regular;
+      const oldPrice = onSale ? regular : oldPriceFrom(p);
       return {
         id: p.id,
         slug: productSlug(p.id, p.name),
