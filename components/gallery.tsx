@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function Gallery({ images, name }: { images: string[]; name: string }) {
   const [index, setIndex] = useState(0);
@@ -12,6 +12,15 @@ export function Gallery({ images, name }: { images: string[]; name: string }) {
     const el = track.current;
     if (el) el.scrollTo({ left: el.clientWidth * i, behavior: "smooth" });
   };
+
+  useEffect(() => {
+    const show = (e: Event) => {
+      const i = images.indexOf((e as CustomEvent<string | undefined>).detail ?? "");
+      if (i >= 0) go(i);
+    };
+    window.addEventListener("shen:show-image", show);
+    return () => window.removeEventListener("shen:show-image", show);
+  });
 
   return (
     <div className="gallery">

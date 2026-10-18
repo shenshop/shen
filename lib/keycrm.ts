@@ -63,6 +63,8 @@ type KOffer = {
   in_reserve?: number | null;
   is_archived?: boolean;
   properties?: { name: string; value: string }[] | null;
+  image_url?: string | null;
+  thumbnail_url?: string | null;
 };
 
 type KCategory = { id: number; name: string; parent_id: number | null };
@@ -112,12 +114,21 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
           o.properties?.filter((pr) => !/колір|цвет|color/i.test(pr.name)).map((pr) => pr.value).join(" / ") ??
           "";
         // Товар береться під замовлення (1–3 дні), тому кожен розмір можна купити незалежно від залишку.
-        return { id: o.id, sku: o.sku, size, color, price: o.price, inStock: true };
+        const image = o.image_url ?? o.thumbnail_url ?? undefined;
+        return { id: o.id, sku: o.sku, size, color, image, price: o.price, inStock: true };
       });
       variants.sort((a, b) => parseFloat(a.size) - parseFloat(b.size) || a.size.localeCompare(b.size));
       const images = [p.thumbnail_url, ...(p.attachments_data ?? [])].filter(
         (u, i, arr): u is string => Boolean(u) && arr.indexOf(u) === i,
       );
+      // Фото варіанта (кольору) KeyCRM віддає як мініатюру: підставляємо повне фото товару з тим самим файлом.
+      const fileName = (u: string) => u.split("?")[0].split("/").pop();
+      for (const v of variants) {
+        if (!v.image) continue;
+        const full = images.find((u) => fileName(u) === fileName(v.image!));
+        if (full) v.image = full;
+        else images.push(v.image);
+      }
       const price = variants.length ? Math.min(...variants.map((v) => v.price)) : (p.min_price ?? p.price ?? 0);
       return {
         id: p.id,

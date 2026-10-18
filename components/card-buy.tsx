@@ -10,20 +10,19 @@ import { colorsOf, itemName } from "@/lib/variants";
 import { ColorPicker } from "./color-picker";
 
 // Розміри та кнопки покупки прямо в картці каталогу, без переходу на сторінку товару.
-export function CardBuy({ product }: { product: Product }) {
+export function CardBuy({ product, color, onColor }: { product: Product; color: string; onColor: (c: string) => void }) {
   const { add } = useCart();
   const router = useRouter();
   const [variantId, setVariantId] = useState<number | null>(null);
   const [error, setError] = useState(false);
   const [quick, setQuick] = useState(false);
   const colors = colorsOf(product);
-  const [color, setColor] = useState(colors[0] ?? "");
   const shown = colors.length ? product.variants.filter((v) => v.color === color) : product.variants;
   const variant = product.variants.find((v) => v.id === variantId) ?? null;
 
   const buy = () => {
     if (!variant) return setError(true);
-    add({ productId: product.id, variantId: variant.id, sku: variant.sku, name: itemName(product, variant), size: variant.size, price: variant.price, image: product.images[0] });
+    add({ productId: product.id, variantId: variant.id, sku: variant.sku, name: itemName(product, variant), size: variant.size, price: variant.price, image: variant.image ?? product.images[0] });
     track("AddToCart", { content_ids: [variant.sku], content_type: "product", value: variant.price, currency: "UAH" });
     router.push("/checkout");
   };
@@ -34,7 +33,7 @@ export function CardBuy({ product }: { product: Product }) {
         colors={colors}
         value={color}
         onChange={(c) => {
-          setColor(c);
+          onColor(c);
           setVariantId(null);
         }}
       />

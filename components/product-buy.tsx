@@ -7,7 +7,7 @@ import { getUtm, track } from "./analytics";
 import { CloseIcon } from "./icons";
 import { formatPrice } from "@/lib/format";
 import type { Product } from "@/lib/types";
-import { colorsOf, itemName } from "@/lib/variants";
+import { colorImage, colorsOf, defaultColor, itemName } from "@/lib/variants";
 import { ColorPicker } from "./color-picker";
 
 // Орієнтовна довжина стопи для європейської розмірної сітки.
@@ -24,7 +24,7 @@ export function ProductBuy({ product }: { product: Product }) {
   const [quick, setQuick] = useState(false);
   const [guide, setGuide] = useState(false);
   const colors = colorsOf(product);
-  const [color, setColor] = useState(colors[0] ?? "");
+  const [color, setColor] = useState(() => defaultColor(product));
   const shown = colors.length ? product.variants.filter((v) => v.color === color) : product.variants;
   const variant = product.variants.find((v) => v.id === variantId) ?? null;
 
@@ -42,7 +42,7 @@ export function ProductBuy({ product }: { product: Product }) {
   const addToCart = (openCheckout: boolean) => {
     const v = requireSize();
     if (!v) return;
-    add({ productId: product.id, variantId: v.id, sku: v.sku, name: itemName(product, v), size: v.size, price: v.price, image: product.images[0] });
+    add({ productId: product.id, variantId: v.id, sku: v.sku, name: itemName(product, v), size: v.size, price: v.price, image: v.image ?? product.images[0] });
     track("AddToCart", { content_ids: [v.sku], content_type: "product", value: v.price, currency: "UAH" });
     if (openCheckout) router.push("/checkout");
     else setOpen(true);
@@ -62,6 +62,8 @@ export function ProductBuy({ product }: { product: Product }) {
         onChange={(c) => {
           setColor(c);
           setVariantId(null);
+          // Галерея гортає до фото обраного кольору.
+          window.dispatchEvent(new CustomEvent("shen:show-image", { detail: colorImage(product, c) }));
         }}
       />
       <div id="sizes" className={error ? "sizes sizes-error" : "sizes"}>
@@ -166,7 +168,7 @@ export function QuickOrder({ product, variant, onClose }: { product: Product; va
           phone: form.get("phone"),
           website: form.get("website"),
           payment: "cod",
-          items: [{ sku: variant.sku, name: itemName(product, variant), size: variant.size, price: variant.price, quantity: 1, image: product.images[0] }],
+          items: [{ sku: variant.sku, name: itemName(product, variant), size: variant.size, price: variant.price, quantity: 1, image: variant.image ?? product.images[0] }],
           utm: getUtm(),
         }),
       });

@@ -1,11 +1,16 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import type { Product } from "@/lib/types";
 import { formatPrice } from "@/lib/format";
+import { colorImage, defaultColor } from "@/lib/variants";
 import { CardBuy } from "./card-buy";
 
 export function ProductCard({ product, priority = false }: { product: Product; priority?: boolean }) {
-  const image = product.images[0];
+  const [color, setColor] = useState(() => defaultColor(product));
+  const image = colorImage(product, color) ?? product.images[0];
   const discount = product.oldPrice ? Math.round((1 - product.price / product.oldPrice) * 100) : 0;
   return (
     <div className="card">
@@ -29,7 +34,7 @@ export function ProductCard({ product, priority = false }: { product: Product; p
           </p>
         </div>
       </Link>
-      <CardBuy product={product} />
+      <CardBuy product={product} color={color} onColor={setColor} />
     </div>
   );
 }
