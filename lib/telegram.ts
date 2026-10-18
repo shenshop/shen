@@ -29,6 +29,19 @@ export function orderMessage(order: OrderRequest, total: number, crmId: number |
     lines.push(order.payment === "prepay" ? "💳 Передоплата" : "💵 Накладений платіж");
   }
   if (order.comment) lines.push("", `💬 ${esc(order.comment)}`);
+  // Готовий текст для уточнення розміру у Viber (натиснути, щоб скопіювати).
+  const first = order.items[0];
+  if (first) {
+    const model = first.name.charAt(0).toLowerCase() + first.name.slice(1);
+    const size = parseInt(first.size, 10);
+    lines.push(
+      "",
+      "Текст для Viber (натисніть, щоб скопіювати):",
+      `<code>Доброго дня! Ви зробили замовлення на ${esc(model)}.\n\nВи носите зазвичай розмір ${esc(first.size)}?${
+        Number.isFinite(size) ? ` Чи буває ${size - 1}?` : ""
+      }</code>`,
+    );
+  }
   return lines.filter((l, i, arr) => l !== "" || arr[i - 1] !== "").join("\n");
 }
 
