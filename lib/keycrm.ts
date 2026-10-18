@@ -130,13 +130,15 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
         else images.push(v.image);
       }
       const price = variants.length ? Math.min(...variants.map((v) => v.price)) : (p.min_price ?? p.price ?? 0);
+      const oldPrice = oldPriceFrom(p);
       return {
         id: p.id,
         slug: productSlug(p.id, p.name),
         name: p.name,
         description: stripHtml(p.description ?? ""),
         price,
-        oldPrice: oldPriceFrom(p),
+        // Стара ціна має сенс лише тоді, коли вона більша за поточну.
+        oldPrice: oldPrice != null && oldPrice > price ? oldPrice : null,
         images,
         categoryId: p.category_id ?? null,
         variants,
