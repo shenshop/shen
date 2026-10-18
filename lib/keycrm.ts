@@ -100,9 +100,7 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
           o.properties?.map((pr) => pr.value).join(" / ") ??
           "";
         const available = (o.quantity ?? 0) - (o.in_reserve ?? 0);
-        // Залишки в KeyCRM не ведуться, тому всі розміри доступні. Увімкнути облік: KEYCRM_TRACK_STOCK=1.
-        const inStock = process.env.KEYCRM_TRACK_STOCK !== "1" || o.quantity == null || available > 0;
-        return { id: o.id, sku: o.sku, size, price: o.price, inStock };
+        return { id: o.id, sku: o.sku, size, price: o.price, inStock: o.quantity == null || available > 0 };
       });
       variants.sort((a, b) => parseFloat(a.size) - parseFloat(b.size) || a.size.localeCompare(b.size));
       const images = [p.thumbnail_url, ...(p.attachments_data ?? [])].filter(
