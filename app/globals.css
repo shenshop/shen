@@ -226,6 +226,11 @@ legend { font-weight: 700; font-size: 20px; margin-bottom: 12px; padding: 0; }
 .option span { font-weight: 600; }
 .option small { color: var(--muted); font-size: 13px; line-height: 1.3; }
 .option-active { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+.fit + .fit { margin-top: 14px; }
+.fit p { margin: 0 0 10px; }
+.fit .options { grid-template-columns: repeat(3, 1fr); }
+.fit .option { padding: 12px 10px; text-align: center; }
+.fit .option span { font-size: 14px; }
 .combo-list { position: absolute; top: 100%; left: 0; right: 0; z-index: 10; list-style: none; margin: 4px 0 0; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 30px rgba(0, 0, 0, .1); max-height: 280px; overflow-y: auto; }
 .combo-list button { width: 100%; text-align: left; padding: 10px; border-radius: 8px; font-weight: 400; font-size: 15px; }
 .combo-list button:hover { background: var(--surface-2); }

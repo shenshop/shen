@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "./cart";
 import { getUtm, track } from "./analytics";
+import { sizeChartFor } from "@/data/sizes";
 import { formatPrice } from "@/lib/format";
 import type { DeliveryService } from "@/lib/types";
 
@@ -30,6 +31,8 @@ export function CheckoutForm() {
   const [warehouse, setWarehouse] = useState<Warehouse | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Уточнення розміру: для кожного товару покупець підтверджує, що це його звичайний розмір.
+  const [fit, setFit] = useState<Record<number, string>>({});
   const tracked = useRef(false);
 
   useEffect(() => {
@@ -68,6 +71,10 @@ export function CheckoutForm() {
       };
     }
 
+    if (items.some((i) => !fit[i.variantId])) return setError("Підтвердіть, будь ласка, розмір");
+    const fitNote = items.map((i) => `Розмір ${i.size} (${i.name}): ${fit[i.variantId]}`).join("\n");
+    const comment = [fitNote, String(form.get("comment") ?? "").trim()].filter(Boolean).join("\n");
+
     setSending(true);
     try {
       const res = await fetch("/api/order", {
@@ -76,7 +83,7 @@ export function CheckoutForm() {
         body: JSON.stringify({
           name: `${form.get("last_name")} ${form.get("first_name")}`.trim(),
           phone: form.get("phone"),
-          comment: form.get("comment"),
+          comment,
           website: form.get("website"),
           delivery,
           payment,
@@ -158,6 +165,36 @@ export function CheckoutForm() {
               </label>
             </div>
           )}
+        </fieldset>
+
+        <fieldset>
+          <legend>Розмір</legend>
+          {items.map((i) => {
+            const cm = sizeChartFor(i.name)[i.size];
+            const smaller = Number.isFinite(parseInt(i.size, 10)) ? String(parseInt(i.size, 10) - 1) : null;
+            const answers = ["Так, завжди " + i.size, ...(smaller ? ["Буває " + smaller] : []), "Не впевнений(а)"];
+            return (
+              <div key={i.variantId} className="fit">
+                <p>
+                  {items.length > 1 && <b>{i.name}. </b>}
+                  Модель повномірна{cm ? `, ${i.size} = ${cm} см устілки` : ""}. Ви зазвичай носите {i.size}?
+                </p>
+                <div className="options">
+                  {answers.map((a) => (
+                    <label key={a} className={fit[i.variantId] === a ? "option option-active" : "option"}>
+                      <input
+                        type="radio"
+                        name={`fit-${i.variantId}`}
+                        checked={fit[i.variantId] === a}
+                        onChange={() => setFit((f) => ({ ...f, [i.variantId]: a }))}
+                      />
+                      <span>{a}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </fieldset>
 
         <fieldset>
