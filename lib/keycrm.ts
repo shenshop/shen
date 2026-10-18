@@ -181,13 +181,6 @@ export async function createOrder(order: OrderRequest, total: number) {
       picture: i.image,
       properties: i.size ? [{ name: "Розмір", value: i.size }] : undefined,
     })),
-    payments: [
-      {
-        payment_method: order.payment === "prepay" ? "Передоплата на картку" : "Накладений платіж",
-        amount: total,
-        status: "not_paid",
-      },
-    ],
   };
 
   return request<{ id: number }>("/order", { method: "POST", body: JSON.stringify(body) });
