@@ -1,4 +1,5 @@
 import "server-only";
+import { settings } from "@/data/settings";
 import type { Category, OrderRequest, Product, Variant } from "./types";
 import { productSlug, slugify } from "./slug";
 
@@ -141,7 +142,10 @@ export async function fetchCatalog(): Promise<{ products: Product[]; categories:
       const onSale = sale != null && sale < regular;
       if (onSale) for (const v of variants) v.price = Math.min(v.price, sale);
       const price = onSale ? sale : regular;
-      const oldPrice = onSale ? regular : oldPriceFrom(p);
+      const markup = settings.crossedPricePercent;
+      const oldPrice = onSale
+        ? regular
+        : (oldPriceFrom(p) ?? (markup > 0 ? Math.round((price * (1 + markup / 100)) / 10) * 10 : null));
       return {
         id: p.id,
         slug: productSlug(p.id, p.name),
