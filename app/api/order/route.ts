@@ -3,6 +3,7 @@ import { getCatalog } from "@/lib/catalog";
 import { createOrder, keycrmEnabled } from "@/lib/keycrm";
 import { normalizePhone } from "@/lib/format";
 import type { OrderRequest } from "@/lib/types";
+import { orderMessage, sendTelegram } from "@/lib/telegram";
 import { itemName } from "@/lib/variants";
 
 const bad = (message: string) => NextResponse.json({ error: message }, { status: 400 });
@@ -62,9 +63,14 @@ export async function POST(req: Request) {
 
   try {
     const created = await createOrder(order, total);
+    await sendTelegram(orderMessage(order, total, created.id));
     return NextResponse.json({ ok: true, id: created.id, total });
   } catch (e) {
     console.error(e);
+    // KeyCRM недоступний: якщо замовлення дійшло в Telegram, клієнт його не втрачає.
+    if (await sendTelegram(orderMessage(order, total, null))) {
+      return NextResponse.json({ ok: true, id: Math.floor(Date.now() / 1000) % 100000, total });
+    }
     return NextResponse.json(
       { error: "Не вдалося оформити замовлення. Спробуйте ще раз або зателефонуйте нам." },
       { status: 502 },
