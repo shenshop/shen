@@ -13,7 +13,7 @@ export const sizeCharts: Record<"women" | "men", Record<string, string>> = {
     "38": "24,5",
     "39": "25,5",
     "40": "26",
-    "41": "27",
+    "41": "26,5–27",
     "42": "28",
     "43": "28,5",
   },
