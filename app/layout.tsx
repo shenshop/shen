@@ -12,7 +12,7 @@ import { settings } from "@/data/settings";
 const font = Manrope({ subsets: ["latin", "cyrillic"], display: "swap", variable: "--font" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://shen-shop.com.ua"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://khoda.com.ua"),
   title: { default: "SHEN — взуття з натуральної шкіри", template: "%s — SHEN" },
   description: "Жіноче та чоловіче взуття з натуральної шкіри. Доставка Новою Поштою та Укрпоштою, оплата при отриманні, обмін 14 днів.",
 };

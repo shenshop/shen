@@ -54,7 +54,7 @@ npm run dev                  # http://localhost:3000
 1. dash.cloudflare.com → Workers & Pages → Create → Import a repository → `shenshop/shen`.
 2. Команди лишити стандартні: Build `npm run build`, Deploy `npx wrangler deploy` (скрипт збірки сам бачить Cloudflare).
 3. Settings → Variables and Secrets: додати ключі з `.env.example`.
-4. Settings → Domains & Routes → Add custom domain → `shen-shop.com.ua`.
+4. Settings → Domains & Routes → Add custom domain → `khoda.com.ua` і `www.khoda.com.ua` (підключено 19.10.2026; NS у imena.ua: maria/oswald.ns.cloudflare.com).
 
 Сховища кешу KV (shen-page-cache, shen-tag-cache) вже створені, їхні ID записані в `wrangler.jsonc`.
 Локальна перевірка Cloudflare-збірки: `npm run preview`.
