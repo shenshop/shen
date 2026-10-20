@@ -7,6 +7,8 @@ import { Gallery } from "@/components/gallery";
 import { Benefits } from "@/components/benefits";
 import { ProductCard } from "@/components/product-card";
 import { formatPrice } from "@/lib/format";
+import { siteUrl } from "@/lib/seo";
+import { settings } from "@/data/settings";
 
 export const revalidate = 3600;
 
@@ -20,10 +22,13 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await getProduct((await params).slug);
   if (!product) return {};
-  const description = product.description.split("\n")[0].slice(0, 160);
+  const first = product.description.split("\n")[0].trim();
+  const full = `${product.name} — ${formatPrice(product.price)}. Доставка по Україні, оплата при отриманні, обмін 14 днів. ${first}`.trim();
+  const description = full.length > 300 ? full.slice(0, 300).replace(/\s+\S*$/, "") + "…" : full;
   return {
-    title: product.name,
+    title: `${product.name} — купити, ціна ${formatPrice(product.price)}`,
     description,
+    alternates: { canonical: `/product/${product.slug}` },
     openGraph: { title: product.name, description, images: product.images.filter((i) => i.startsWith("http")).slice(0, 1) },
   };
 }
@@ -40,12 +45,16 @@ export default async function ProductPage({ params }: Props) {
     "@context": "https://schema.org",
     "@type": "Product",
     name: product.name,
+    brand: { "@type": "Brand", name: settings.shopName },
     image: product.images,
     description: product.description,
     offers: {
       "@type": "AggregateOffer",
       priceCurrency: "UAH",
       lowPrice: product.price,
+      highPrice: Math.max(...product.variants.map((v) => v.price), product.price),
+      offerCount: product.variants.length,
+      url: siteUrl(`/product/${product.slug}`),
       availability: product.variants.some((v) => v.inStock) ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
     },
   };

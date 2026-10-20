@@ -1,3 +1,4 @@
+import { SITE_URL } from "@/lib/seo";
 import type { Metadata, Viewport } from "next";
 import { Manrope } from "next/font/google";
 import "./globals.css";
@@ -12,9 +13,10 @@ import { settings } from "@/data/settings";
 const font = Manrope({ subsets: ["latin", "cyrillic"], display: "swap", variable: "--font" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://khoda.com.ua"),
+  metadataBase: new URL(SITE_URL),
   title: { default: "SHEN — взуття з натуральної шкіри", template: "%s — SHEN" },
   description: "Жіноче та чоловіче взуття з натуральної шкіри. Доставка Новою Поштою та Укрпоштою, оплата при отриманні, обмін 14 днів.",
+  openGraph: { type: "website", locale: "uk_UA", siteName: settings.shopName },
 };
 
 export const viewport: Viewport = { themeColor: "#faf8f5", width: "device-width", initialScale: 1 };

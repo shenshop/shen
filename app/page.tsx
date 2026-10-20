@@ -1,8 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { getCatalog, getFeatured } from "@/lib/catalog";
 import { ProductCard } from "@/components/product-card";
 import { Benefits } from "@/components/benefits";
+
+
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 export const revalidate = 3600;
 
