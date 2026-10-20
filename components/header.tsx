@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useScrollLock } from "@/lib/scroll-lock";
 import { useCart } from "./cart";
 import { BagIcon, CloseIcon, MenuIcon } from "./icons";
 import type { Category } from "@/lib/types";
@@ -9,6 +10,7 @@ import type { Category } from "@/lib/types";
 export function Header({ categories, shopName, contacts }: { categories: Category[]; shopName: string; contacts: React.ReactNode }) {
   const { count, setOpen } = useCart();
   const [menu, setMenu] = useState(false);
+  useScrollLock(menu);
   const roots = categories.filter((c) => c.parentId == null);
 
   return (

@@ -88,6 +88,8 @@ p { margin: 0 0 12px; }
 .mobile-nav a { display: block; padding: 10px 0; }
 .mobile-nav-root { font-weight: 700; margin-top: 8px; }
 .mobile-nav-sub { padding-left: 14px !important; color: var(--muted); font-size: 16px; }
+body.scroll-lock { position: fixed; left: 0; right: 0; overflow: hidden; }
+.modal, .sheet, .mobile-nav { overscroll-behavior: contain; }
 .modal-backdrop { display: grid; place-items: end center; }
 @media (min-width: 700px) { .modal-backdrop { place-items: center; } }
 .modal { width: min(460px, 100%); max-height: 90vh; overflow-y: auto; background: var(--bg); border-radius: 20px 20px 0 0; padding: 8px 20px 24px; display: flex; flex-direction: column; gap: 14px; animation: up .2s ease-out; }

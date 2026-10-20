@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useScrollLock } from "@/lib/scroll-lock";
 import { useCart } from "./cart";
 import { CloseIcon, MinusIcon, PlusIcon } from "./icons";
 import { formatPrice } from "@/lib/format";
@@ -10,9 +10,7 @@ import { formatPrice } from "@/lib/format";
 export function CartDrawer() {
   const { items, total, open, setOpen, setQuantity, remove } = useCart();
 
-  useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
-  }, [open]);
+  useScrollLock(open);
 
   if (!open) return null;
 

@@ -10,6 +10,7 @@ import { formatPrice } from "@/lib/format";
 import type { Product } from "@/lib/types";
 import { colorImage, colorsOf, defaultColor, itemName } from "@/lib/variants";
 import { ColorPicker } from "./color-picker";
+import { useScrollLock } from "@/lib/scroll-lock";
 
 
 export function ProductBuy({ product }: { product: Product }) {
@@ -19,6 +20,7 @@ export function ProductBuy({ product }: { product: Product }) {
   const [error, setError] = useState(false);
   const [quick, setQuick] = useState(false);
   const [guide, setGuide] = useState(false);
+  useScrollLock(guide);
   const colors = colorsOf(product);
   const insole = sizeChartFor(product.name);
   const sizes = [...new Set(product.variants.map((v) => v.size))];
@@ -147,6 +149,7 @@ export function ProductBuy({ product }: { product: Product }) {
 }
 
 export function QuickOrder({ product, variant, onClose }: { product: Product; variant: Product["variants"][number]; onClose: () => void }) {
+  useScrollLock(true);
   const router = useRouter();
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
