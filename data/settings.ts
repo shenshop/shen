@@ -18,14 +18,14 @@ export const settings = {
   email: "",
 
   // Соцмережі: повне посилання на сторінку
-  instagram: "https://instagram.com/",
-  tiktok: "https://www.tiktok.com/",
+  instagram: "https://www.instagram.com/shen_shop.ua",
+  tiktok: "https://www.tiktok.com/@shen_shop.ua",
   facebook: "",
 
   // Месенджери
-  viber: "+380738113785", // номер у Viber
-  telegram: "", // нікнейм без @, наприклад: shen_shop
-  whatsapp: "", // номер у WhatsApp, наприклад: +380738113785
+  viber: "+380730066293", // номер у Viber
+  telegram: "+380638341816", // нікнейм без @ (наприклад: shen_shop) або номер +380...
+  whatsapp: "+380730066293", // номер у WhatsApp, наприклад: +380738113785
 
   // Закреслена «стара» ціна: на скільки відсотків вища за ціну з KeyCRM. 0 = не показувати.
   // Товар продається за ціною з KeyCRM. Якщо в товарі заповнено «Вартість зі знижкою», то закреслюється ціна з KeyCRM.

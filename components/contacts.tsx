@@ -13,7 +13,7 @@ export function contactLinks() {
     s.tiktok && { label: "TikTok", href: s.tiktok },
     s.facebook && { label: "Facebook", href: s.facebook },
     s.viber && { label: "Viber", href: `viber://chat?number=%2B${digits(s.viber)}` },
-    s.telegram && { label: "Telegram", href: `https://t.me/${s.telegram.replace(/^@/, "")}` },
+    s.telegram && { label: "Telegram", href: s.telegram.startsWith("+") ? `https://t.me/+${digits(s.telegram)}` : `https://t.me/${s.telegram.replace(/^@/, "")}` },
     s.whatsapp && { label: "WhatsApp", href: `https://wa.me/${digits(s.whatsapp)}` },
     s.email && { label: s.email, href: `mailto:${s.email}` },
   ].filter((l): l is { label: string; href: string } => Boolean(l));
