@@ -33,7 +33,7 @@ async function all<T>(path: string): Promise<T[]> {
   const out: T[] = [];
   const sep = path.includes("?") ? "&" : "?";
   for (let page = 1; page <= 40; page++) {
-    const res = await request<Page<T>>(`${path}${sep}limit=50&page=${page}`, {
+    const res = await request<Page<T>>(`${path}${sep}page=${page}&limit=50`, {
       next: { revalidate: REVALIDATE_SECONDS, tags: ["catalog"] },
     });
     out.push(...res.data);
