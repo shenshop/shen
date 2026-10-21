@@ -17,7 +17,9 @@
   "vars": {
     "KEYCRM_SOURCE_ID": "13",
     "KEYCRM_NOVAPOSHTA_ID": "4",
-    "KEYCRM_UKRPOSHTA_ID": "3"
+    "KEYCRM_UKRPOSHTA_ID": "3",
+    // Куди бот шле сповіщення про замовлення (Id Дрона з @userinfobot). Ключ бота — секрет TELEGRAM_BOT_TOKEN у Cloudflare.
+    "TELEGRAM_CHAT_ID": "413905782"
   },
   "keep_vars": true,
   "observability": { "enabled": true }
