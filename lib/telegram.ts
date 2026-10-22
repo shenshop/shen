@@ -45,15 +45,36 @@ export function orderMessage(order: OrderRequest, total: number, crmId: number |
   return lines.filter((l, i, arr) => l !== "" || arr[i - 1] !== "").join("\n");
 }
 
-export async function sendTelegram(text: string): Promise<boolean> {
+// Фото замовлених товарів (без повторів, максимум 10, як дозволяє Telegram).
+export function orderPhotos(order: OrderRequest) {
+  return [...new Set(order.items.map((i) => i.image).filter((u) => u.startsWith("http")))].slice(0, 10);
+}
+
+async function telegram(method: string, body: object) {
+  const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT_ID, ...body }),
+  });
+  return res.ok;
+}
+
+// Надсилає текст замовлення, а з ним фото товарів. Якщо фото не пройде,
+// текст однаково надсилається окремо, щоб замовлення не загубилось.
+export async function sendTelegram(text: string, photos: string[] = []): Promise<boolean> {
   if (!telegramEnabled()) return false;
   try {
-    const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT_ID, text, parse_mode: "HTML" }),
-    });
-    return res.ok;
+    // Одне фото і короткий текст: одне повідомлення з підписом.
+    if (photos.length === 1 && text.length <= 1024) {
+      if (await telegram("sendPhoto", { photo: photos[0], caption: text, parse_mode: "HTML" })) return true;
+    } else if (photos.length === 1) {
+      await telegram("sendPhoto", { photo: photos[0] }).catch(() => false);
+    } else if (photos.length > 1) {
+      await telegram("sendMediaGroup", { media: photos.map((url) => ({ type: "photo", media: url })) }).catch(
+        () => false,
+      );
+    }
+    return await telegram("sendMessage", { text, parse_mode: "HTML" });
   } catch (e) {
     console.error(e);
     return false;
