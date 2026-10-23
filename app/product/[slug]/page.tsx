@@ -37,8 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProductPage({ params }: Props) {
   const product = await getProduct((await params).slug);
   if (!product) notFound();
-  const { products, categories } = await getCatalog();
-  const category = categories.find((c) => c.id === product.categoryId);
+  const { products } = await getCatalog();
   const related = products.filter((p) => p.id !== product.id && p.categoryId === product.categoryId).slice(0, 4);
   const more = related.length ? related : products.filter((p) => p.id !== product.id).slice(0, 4);
 
@@ -63,18 +62,9 @@ export default async function ProductPage({ params }: Props) {
   return (
     <>
       <section className="container product">
-        <Link className="back-link only-mobile" href={category ? `/catalog/${category.slug}` : "/catalog"}>
-          ← {category ? category.name : "До каталогу"}
+        <Link className="back-link" href="/catalog">
+          ← Повернутись до каталогу
         </Link>
-        <nav className="crumbs only-desktop">
-          <Link href="/catalog">Каталог</Link>
-          {category && (
-            <>
-              <span>/</span>
-              <Link href={`/catalog/${category.slug}`}>{category.name}</Link>
-            </>
-          )}
-        </nav>
         <div className="product-grid">
           <Gallery images={product.images} name={product.name} />
           <div className="product-info">
@@ -91,9 +81,6 @@ export default async function ProductPage({ params }: Props) {
                 {product.description.split("\n").map((line, i) => (line.trim() ? <p key={i}>{line}</p> : null))}
               </div>
             )}
-            <Link className="btn btn-light back-btn" href="/catalog">
-              ← Повернутись до каталогу
-            </Link>
           </div>
         </div>
       </section>
