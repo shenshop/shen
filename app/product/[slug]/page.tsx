@@ -81,6 +81,9 @@ export default async function ProductPage({ params }: Props) {
                 {product.description.split("\n").map((line, i) => (line.trim() ? <p key={i}>{line}</p> : null))}
               </div>
             )}
+            <Link className="btn btn-light back-btn" href="/catalog">
+              ← Повернутись до каталогу
+            </Link>
           </div>
         </div>
       </section>

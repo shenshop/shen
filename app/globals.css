@@ -169,6 +169,7 @@ body.scroll-lock { position: fixed; left: 0; right: 0; overflow: hidden; }
 /* Товар */
 .product { padding-top: 12px; padding-bottom: 24px; }
 .back-link { display: inline-flex; align-items: center; gap: 6px; margin: 4px 0 12px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; font-weight: 600; }
+.back-btn { width: 100%; margin-top: 24px; }
 .crumbs { display: flex; gap: 8px; font-size: 14px; color: var(--muted); margin-bottom: 12px; }
 .product-grid { display: grid; gap: 24px; }
 @media (min-width: 900px) { .product-grid { grid-template-columns: 1.15fr 1fr; gap: 48px; align-items: start; } .product-info { position: sticky; top: 88px; } }
