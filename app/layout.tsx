@@ -7,7 +7,8 @@ import { Header } from "@/components/header";
 import { CartDrawer } from "@/components/cart-drawer";
 import { Analytics, PixelScript } from "@/components/analytics";
 import { getCatalog } from "@/lib/catalog";
-import { Contacts } from "@/components/contacts";
+import { Contacts, contactLinks } from "@/components/contacts";
+import { ChatButton } from "@/components/chat-button";
 import { settings } from "@/data/settings";
 
 const font = Manrope({ subsets: ["latin", "cyrillic"], display: "swap", variable: "--font" });
@@ -41,6 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="container muted small">© {new Date().getFullYear()} {settings.shopName}</div>
           </footer>
           <CartDrawer />
+          <ChatButton links={contactLinks().filter((l) => ["Viber", "Telegram", "WhatsApp"].includes(l.label))} />
         </CartProvider>
         <Analytics />
       </body>
