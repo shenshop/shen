@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getCatalog, productsInCategory } from "@/lib/catalog";
 import { idFromSlug } from "@/lib/slug";
 import { formatPrice } from "@/lib/format";
-import { ProductGrid } from "@/components/product-grid";
+import { ProductCard } from "@/components/product-card";
 import { CategoryChips } from "@/components/category-chips";
 
 export const revalidate = 3600;
@@ -44,7 +44,11 @@ export default async function CategoryPage({ params }: Props) {
       <h1 className="page-title">{current.name}</h1>
       <CategoryChips categories={categories} active={current.id} />
       {list.length ? (
-        <ProductGrid products={list} />
+        <div className="grid">
+          {list.map((p, i) => (
+            <ProductCard key={p.id} product={p} priority={i < 4} />
+          ))}
+        </div>
       ) : (
         <p className="muted">У цій категорії поки немає товарів.</p>
       )}
