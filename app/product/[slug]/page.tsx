@@ -9,6 +9,7 @@ import { ProductCard } from "@/components/product-card";
 import { formatPrice } from "@/lib/format";
 import { siteUrl } from "@/lib/seo";
 import { settings } from "@/data/settings";
+import { SaleTimer } from "@/components/sale-timer";
 
 export const revalidate = 3600;
 
@@ -79,6 +80,7 @@ export default async function ProductPage({ params }: Props) {
               <strong>{formatPrice(product.price)}</strong>
               {product.oldPrice && <s>{formatPrice(product.oldPrice)}</s>}
             </p>
+            {product.oldPrice && <SaleTimer />}
             <ProductBuy product={product} />
             <Benefits compact />
             {product.description && (
