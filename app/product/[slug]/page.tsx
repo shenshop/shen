@@ -63,7 +63,10 @@ export default async function ProductPage({ params }: Props) {
   return (
     <>
       <section className="container product">
-        <nav className="crumbs">
+        <Link className="back-link only-mobile" href={category ? `/catalog/${category.slug}` : "/catalog"}>
+          ← {category ? category.name : "До каталогу"}
+        </Link>
+        <nav className="crumbs only-desktop">
           <Link href="/catalog">Каталог</Link>
           {category && (
             <>
@@ -88,6 +91,9 @@ export default async function ProductPage({ params }: Props) {
                 {product.description.split("\n").map((line, i) => (line.trim() ? <p key={i}>{line}</p> : null))}
               </div>
             )}
+            <Link className="btn btn-light back-btn" href="/catalog">
+              ← Повернутись до каталогу
+            </Link>
           </div>
         </div>
       </section>
