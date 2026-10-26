@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
     remotePatterns: [{ protocol: "https", hostname: "**" }],
     formats: ["image/avif", "image/webp"],
   },
+  experimental: {
+    // Стилі вбудовуються прямо в сторінку: без окремого CSS-файлу сторінка не може відкритись «голою».
+    inlineCss: true,
+  },
 };
 
 export default nextConfig;
