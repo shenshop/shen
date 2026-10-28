@@ -12,14 +12,14 @@ export async function webhookSecret() {
 }
 
 const line = (o: PlannedOrder) =>
-  `№${o.id} · ${o.lines.map((l) => esc(l.sku) + (l.qty > 1 ? ` ×${l.qty}` : "")).join(", ")}${o.buyer ? ` · ${esc(o.buyer)}` : ""}`;
+  `№${o.id}${o.awaitingDelivery ? " (чекаєм поставку)" : ""} · ${o.lines.map((l) => esc(l.sku) + (l.qty > 1 ? ` ×${l.qty}` : "")).join(", ")}${o.buyer ? ` · ${esc(o.buyer)}` : ""}`;
 
 const send = (text: string, extra: object = {}) =>
   telegram("sendMessage", { text: text.slice(0, 4000), parse_mode: "HTML", ...extra });
 
 export async function handleCheck() {
   const plan = await buildPlan();
-  const lines = [`<b>Склад «Основний», замовлення «Виготовляється»</b>`, ""];
+  const lines = [`<b>Склад «Основний», замовлення «Виготовляється» і «Чекаєм поставку»</b>`, ""];
   if (plan.ready.length) {
     lines.push(`✅ <b>Товар є, Нова Пошта, можна в «Готово до відгрузки» (${plan.ready.length}):</b>`, ...plan.ready.map(line));
   } else lines.push("✅ Поки немає замовлень з Новою Поштою, для яких є товар на складі.");

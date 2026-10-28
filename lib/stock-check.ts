@@ -1,11 +1,12 @@
 import "server-only";
 import { request } from "./keycrm";
 
-// Перевірка складу для всіх замовлень «Виготовляється»: від найстаршого до найновішого,
+// Перевірка складу для всіх замовлень «Виготовляється» і «Чекаєм поставку»: від найстаршого до найновішого,
 // кожне отримує товар, якщо його вистачає на складі. Переводимо у «Готово до відгрузки»
 // лише замовлення з Новою Поштою і тільки після підтвердження в Telegram.
 
 const FROM_STATUS = "виготовляється";
+const ALSO_FROM_STATUS = "чекаєм поставку"; // перевіряємо разом, якщо такий статус є
 const TO_STATUS = "готово до відгрузки";
 const WAREHOUSE = "основний";
 // KeyCRM дозволяє 20 запитів на хвилину, тож за одне натискання переводимо не більше стількох.
@@ -19,6 +20,7 @@ type KOrderProduct = {
   warehouse?: { id: number; name?: string } | null;
 };
 type KOrder = {
+  status_id?: number;
   id: number;
   created_at?: string;
   buyer?: { full_name?: string } | null;
@@ -39,9 +41,9 @@ const fresh = { cache: "no-store" as const };
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
 export type Line = { sku: string; qty: number };
-export type PlannedOrder = { id: number; buyer: string; lines: Line[]; service: string };
+export type PlannedOrder = { id: number; buyer: string; lines: Line[]; service: string; awaitingDelivery: boolean };
 export type Plan = {
-  fromId: number;
+  fromIds: number[];
   toId: number;
   ready: PlannedOrder[]; // товар є, Нова Пошта: переводимо
   readyOther: PlannedOrder[]; // товар є, але інша служба доставки: лише показуємо
@@ -60,19 +62,20 @@ async function statusIds() {
   const list = rows(await request<List<KStatus>>("/order/status?limit=50", fresh));
   const find = (name: string) => list.find((s) => norm(s.name) === name)?.id;
   const fromId = find(FROM_STATUS);
+  const alsoId = find(ALSO_FROM_STATUS);
   const toId = find(TO_STATUS);
   if (!fromId || !toId) throw new Error(`У KeyCRM не знайдено статус «Виготовляється» або «Готово до відгрузки»`);
-  return { fromId, toId };
+  return { fromIds: alsoId ? [fromId, alsoId] : [fromId], alsoId, toId };
 }
 
 export async function buildPlan(): Promise<Plan> {
-  const { fromId, toId } = await statusIds();
+  const { fromIds, alsoId, toId } = await statusIds();
   const { npIds, names } = await deliveryServices();
 
   const orders: KOrder[] = [];
   for (let page = 1; page <= 4; page++) {
     const res = await request<List<KOrder>>(
-      `/order?filter[status_id]=${fromId}&include=products.offer,shipping.deliveryService,buyer&sort=id&limit=50&page=${page}`,
+      `/order?filter[status_id]=${fromIds.join(",")}&include=products.offer,shipping.deliveryService,buyer&sort=id&limit=50&page=${page}`,
       fresh,
     );
     orders.push(...rows(res));
@@ -101,7 +104,7 @@ export async function buildPlan(): Promise<Plan> {
     const products = o.products ?? [];
     const lines = products.map((p) => ({ sku: p.offer?.sku || p.name || "?", qty: p.quantity || 1 }));
     const service = names.get(serviceId) ?? "без служби доставки";
-    const entry = { id: o.id, buyer: o.buyer?.full_name?.trim() || "", lines, service };
+    const entry = { id: o.id, buyer: o.buyer?.full_name?.trim() || "", lines, service, awaitingDelivery: o.status_id === alsoId };
     // Потрібна кількість по кожному варіанту (у замовленні може бути кілька однакових позицій).
     const need = new Map<number, number>();
     let known = products.length > 0;
@@ -115,7 +118,7 @@ export async function buildPlan(): Promise<Plan> {
       (npIds.has(serviceId) ? ready : readyOther).push(entry);
     } else waiting.push(entry);
   }
-  return { fromId, toId, ready, readyOther, waiting };
+  return { fromIds, toId, ready, readyOther, waiting };
 }
 
 export async function moveOrders(plan: Plan) {
