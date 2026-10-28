@@ -19,10 +19,17 @@ const send = (text: string, extra: object = {}) =>
 
 export async function handleCheck() {
   const plan = await buildPlan();
-  const lines = [`<b>Склад «Основний», замовлення «Виготовляється» (Нова Пошта)</b>`, ""];
+  const lines = [`<b>Склад «Основний», замовлення «Виготовляється»</b>`, ""];
   if (plan.ready.length) {
-    lines.push(`✅ <b>Товар є, можна в «Готово до відгрузки» (${plan.ready.length}):</b>`, ...plan.ready.map(line));
-  } else lines.push("✅ Поки немає замовлень, для яких є товар на складі.");
+    lines.push(`✅ <b>Товар є, Нова Пошта, можна в «Готово до відгрузки» (${plan.ready.length}):</b>`, ...plan.ready.map(line));
+  } else lines.push("✅ Поки немає замовлень з Новою Поштою, для яких є товар на складі.");
+  if (plan.readyOther.length) {
+    lines.push(
+      "",
+      `📦 <b>Товар є, але інша доставка, переведіть вручну (${plan.readyOther.length}):</b>`,
+      ...plan.readyOther.map((o) => `${line(o)} · ${esc(o.service)}`),
+    );
+  }
   if (plan.waiting.length) lines.push("", `⏳ <b>Ще чекають товар (${plan.waiting.length}):</b>`, ...plan.waiting.map(line));
   const n = Math.min(plan.ready.length, MAX_MOVES);
   await send(
@@ -43,7 +50,7 @@ export async function handleCheck() {
 export async function handleMove() {
   // Перераховуємо заново: склад міг змінитись після перевірки.
   const plan = await buildPlan();
-  if (!plan.ready.length) return send("Зараз немає замовлень, для яких є товар. Нічого не змінено.");
+  if (!plan.ready.length) return send("Зараз немає замовлень з Новою Поштою, для яких є товар. Нічого не змінено.");
   const { moved, error } = await moveOrders(plan);
   const lines = [`✅ <b>Переведено в «Готово до відгрузки»: ${moved.length}</b>`, ...moved.map(line)];
   const left = plan.ready.length - moved.length;

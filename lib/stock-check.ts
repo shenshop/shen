@@ -1,9 +1,9 @@
 import "server-only";
 import { request } from "./keycrm";
 
-// Перевірка складу для замовлень «Виготовляється» (лише Нова Пошта):
-// від найстаршого до найновішого, кожне отримує товар, якщо його вистачає на складі.
-// Переводимо у «Готово до відгрузки» тільки після підтвердження в Telegram.
+// Перевірка складу для всіх замовлень «Виготовляється»: від найстаршого до найновішого,
+// кожне отримує товар, якщо його вистачає на складі. Переводимо у «Готово до відгрузки»
+// лише замовлення з Новою Поштою і тільки після підтвердження в Telegram.
 
 const FROM_STATUS = "виготовляється";
 const TO_STATUS = "готово до відгрузки";
@@ -39,15 +39,21 @@ const fresh = { cache: "no-store" as const };
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
 export type Line = { sku: string; qty: number };
-export type PlannedOrder = { id: number; buyer: string; lines: Line[] };
-export type Plan = { fromId: number; toId: number; ready: PlannedOrder[]; waiting: PlannedOrder[] };
+export type PlannedOrder = { id: number; buyer: string; lines: Line[]; service: string };
+export type Plan = {
+  fromId: number;
+  toId: number;
+  ready: PlannedOrder[]; // товар є, Нова Пошта: переводимо
+  readyOther: PlannedOrder[]; // товар є, але інша служба доставки: лише показуємо
+  waiting: PlannedOrder[];
+};
 
 // Усі служби доставки Нової Пошти в KeyCRM («НП» від сайту, «Нова Пошта» з інтеграції тощо).
-async function novaPoshtaIds() {
+async function deliveryServices() {
   const list = rows(await request<List<KStatus>>("/order/delivery-service?limit=50", fresh));
-  const ids = new Set(list.filter((s) => /^нп$|нова\s*пошта|nova\s*po[sc]h?ta/i.test(s.name.trim())).map((s) => s.id));
-  ids.add(Number(process.env.KEYCRM_NOVAPOSHTA_ID) || 4);
-  return ids;
+  const npIds = new Set(list.filter((s) => /^нп$|нова\s*пошта|nova\s*po[sc]h?ta/i.test(s.name.trim())).map((s) => s.id));
+  npIds.add(Number(process.env.KEYCRM_NOVAPOSHTA_ID) || 4);
+  return { npIds, names: new Map(list.map((s) => [s.id, s.name.trim()])) };
 }
 
 async function statusIds() {
@@ -61,7 +67,7 @@ async function statusIds() {
 
 export async function buildPlan(): Promise<Plan> {
   const { fromId, toId } = await statusIds();
-  const npIds = await novaPoshtaIds();
+  const { npIds, names } = await deliveryServices();
 
   const orders: KOrder[] = [];
   for (let page = 1; page <= 4; page++) {
@@ -72,10 +78,10 @@ export async function buildPlan(): Promise<Plan> {
     orders.push(...rows(res));
     if (Array.isArray(res) || !res.next_page_url) break;
   }
-  const np = orders.filter((o) => npIds.has(o.shipping?.delivery_service_id ?? -1)).sort((a, b) => a.id - b.id);
+  orders.sort((a, b) => a.id - b.id);
 
   // Скільки кожного варіанту вільно на складі «Основний» (залишок мінус резерв).
-  const offerIds = [...new Set(np.flatMap((o) => (o.products ?? []).map((p) => p.offer?.id).filter(Boolean)))];
+  const offerIds = [...new Set(orders.flatMap((o) => (o.products ?? []).map((p) => p.offer?.id).filter(Boolean)))];
   const free = new Map<number, number>();
   for (let i = 0; i < offerIds.length; i += 50) {
     const ids = offerIds.slice(i, i + 50).join(",");
@@ -88,11 +94,14 @@ export async function buildPlan(): Promise<Plan> {
   }
 
   const ready: PlannedOrder[] = [];
+  const readyOther: PlannedOrder[] = [];
   const waiting: PlannedOrder[] = [];
-  for (const o of np) {
+  for (const o of orders) {
+    const serviceId = o.shipping?.delivery_service_id ?? -1;
     const products = o.products ?? [];
     const lines = products.map((p) => ({ sku: p.offer?.sku || p.name || "?", qty: p.quantity || 1 }));
-    const entry = { id: o.id, buyer: o.buyer?.full_name?.trim() || "", lines };
+    const service = names.get(serviceId) ?? "без служби доставки";
+    const entry = { id: o.id, buyer: o.buyer?.full_name?.trim() || "", lines, service };
     // Потрібна кількість по кожному варіанту (у замовленні може бути кілька однакових позицій).
     const need = new Map<number, number>();
     let known = products.length > 0;
@@ -103,10 +112,10 @@ export async function buildPlan(): Promise<Plan> {
     const enough = known && [...need].every(([id, q]) => (free.get(id) ?? 0) >= q);
     if (enough) {
       for (const [id, q] of need) free.set(id, (free.get(id) ?? 0) - q);
-      ready.push(entry);
+      (npIds.has(serviceId) ? ready : readyOther).push(entry);
     } else waiting.push(entry);
   }
-  return { fromId, toId, ready, waiting };
+  return { fromId, toId, ready, readyOther, waiting };
 }
 
 export async function moveOrders(plan: Plan) {
