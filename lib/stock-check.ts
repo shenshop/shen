@@ -9,7 +9,7 @@ const FROM_STATUS = "виготовляється";
 const TO_STATUS = "готово до відгрузки";
 const WAREHOUSE = "основний";
 // KeyCRM дозволяє 20 запитів на хвилину, тож за одне натискання переводимо не більше стількох.
-export const MAX_MOVES = 12;
+export const MAX_MOVES = 10;
 
 type KStatus = { id: number; name: string };
 type KOrderProduct = {
@@ -42,6 +42,14 @@ export type Line = { sku: string; qty: number };
 export type PlannedOrder = { id: number; buyer: string; lines: Line[] };
 export type Plan = { fromId: number; toId: number; ready: PlannedOrder[]; waiting: PlannedOrder[] };
 
+// Усі служби доставки Нової Пошти в KeyCRM («НП» від сайту, «Нова Пошта» з інтеграції тощо).
+async function novaPoshtaIds() {
+  const list = rows(await request<List<KStatus>>("/order/delivery-service?limit=50", fresh));
+  const ids = new Set(list.filter((s) => /^нп$|нова\s*пошта|nova\s*po[sc]h?ta/i.test(s.name.trim())).map((s) => s.id));
+  ids.add(Number(process.env.KEYCRM_NOVAPOSHTA_ID) || 4);
+  return ids;
+}
+
 async function statusIds() {
   const list = rows(await request<List<KStatus>>("/order/status?limit=50", fresh));
   const find = (name: string) => list.find((s) => norm(s.name) === name)?.id;
@@ -53,7 +61,7 @@ async function statusIds() {
 
 export async function buildPlan(): Promise<Plan> {
   const { fromId, toId } = await statusIds();
-  const npId = Number(process.env.KEYCRM_NOVAPOSHTA_ID) || 4;
+  const npIds = await novaPoshtaIds();
 
   const orders: KOrder[] = [];
   for (let page = 1; page <= 4; page++) {
@@ -64,7 +72,7 @@ export async function buildPlan(): Promise<Plan> {
     orders.push(...rows(res));
     if (Array.isArray(res) || !res.next_page_url) break;
   }
-  const np = orders.filter((o) => o.shipping?.delivery_service_id === npId).sort((a, b) => a.id - b.id);
+  const np = orders.filter((o) => npIds.has(o.shipping?.delivery_service_id ?? -1)).sort((a, b) => a.id - b.id);
 
   // Скільки кожного варіанту вільно на складі «Основний» (залишок мінус резерв).
   const offerIds = [...new Set(np.flatMap((o) => (o.products ?? []).map((p) => p.offer?.id).filter(Boolean)))];
