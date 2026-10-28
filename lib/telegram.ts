@@ -8,7 +8,7 @@ export function telegramEnabled() {
   return Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
 }
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 export function orderMessage(order: OrderRequest, total: number, crmId: number | null) {
   const lines = [
@@ -50,7 +50,7 @@ export function orderPhotos(order: OrderRequest) {
   return [...new Set(order.items.map((i) => i.image).filter((u) => u.startsWith("http")))].slice(0, 10);
 }
 
-async function telegram(method: string, body: object) {
+export async function telegram(method: string, body: object) {
   const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

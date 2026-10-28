@@ -9,7 +9,7 @@ const REVALIDATE_SECONDS = 3600;
 
 export const keycrmEnabled = () => Boolean(process.env.KEYCRM_API_KEY);
 
-async function request<T>(path: string, init?: RequestInit & { next?: { revalidate?: number; tags?: string[] } }): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit & { next?: { revalidate?: number; tags?: string[] } }): Promise<T> {
   const res = await fetch(BASE + path, {
     ...init,
     headers: {
