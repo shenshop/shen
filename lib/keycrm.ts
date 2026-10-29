@@ -10,15 +10,24 @@ const REVALIDATE_SECONDS = 3600;
 export const keycrmEnabled = () => Boolean(process.env.KEYCRM_API_KEY);
 
 export async function request<T>(path: string, init?: RequestInit & { next?: { revalidate?: number; tags?: string[] } }): Promise<T> {
-  const res = await fetch(BASE + path, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${process.env.KEYCRM_API_KEY}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...init?.headers,
-    },
-  });
+  const send = () =>
+    fetch(BASE + path, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${process.env.KEYCRM_API_KEY}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...init?.headers,
+      },
+    });
+  let res = await send();
+  // 429 «Забагато спроб»: KeyCRM дозволяє ~20 запитів на хвилину. Чекаємо і пробуємо ще,
+  // інакше збірка сайту падає, коли каталог тягнеться одночасно з ботом чи синхронізацією.
+  for (let attempt = 1; res.status === 429 && attempt <= 4; attempt++) {
+    const wait = Number(res.headers.get("retry-after")) || 5 * 2 ** attempt;
+    await new Promise((r) => setTimeout(r, Math.min(wait, 60) * 1000));
+    res = await send();
+  }
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`KeyCRM ${init?.method ?? "GET"} ${path} → ${res.status}: ${body.slice(0, 300)}`);
