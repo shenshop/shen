@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { telegram } from "@/lib/telegram";
-import { CHECK_BUTTON, handleCheck, handleMove, handleSent, handleTtnList, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { CHECK_BUTTON, handleCheck, handleMove, handleRefresh, handleSent, handleTtnList, REFRESH_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +41,7 @@ export async function POST(req: Request) {
       const text = update.message?.text?.trim() ?? "";
       if (text === CHECK_BUTTON || text.startsWith("/sklad") || text.startsWith("/start")) await handleCheck();
       else if (text === TTN_BUTTON || text.startsWith("/ttn")) await handleTtnList(new URL(req.url).origin);
+      else if (text === REFRESH_BUTTON || text.startsWith("/refresh")) await handleRefresh();
     }
   } catch (e) {
     console.error(e);

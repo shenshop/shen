@@ -18,10 +18,11 @@ export async function GET(req: Request) {
     commands: [
       { command: "sklad", description: "Перевірити склад" },
       { command: "ttn", description: "ТТН клієнтам" },
+      { command: "refresh", description: "Оновити сайт з KeyCRM" },
     ],
   });
   const keyboard = await telegram("sendMessage", {
-    text: "Кнопки внизу чату: «📦 Перевірити склад» після приходу товару і «📮 ТТН клієнтам» після відправки.",
+    text: "Кнопки внизу чату: «📦 Перевірити склад» після приходу товару і «📮 ТТН клієнтам» після відправки, «🔄 Оновити сайт» після змін у KeyCRM.",
     reply_markup: KEYBOARD,
   });
   return NextResponse.json({ ok: webhook && keyboard, webhook: `${origin}/api/telegram` });

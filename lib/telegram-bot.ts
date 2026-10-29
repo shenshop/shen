@@ -1,11 +1,17 @@
 import "server-only";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveOrders, type PlannedOrder } from "./stock-check";
 import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./ttn-notify";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
 export const TTN_BUTTON = "📮 ТТН клієнтам";
-export const KEYBOARD = { keyboard: [[{ text: CHECK_BUTTON }, { text: TTN_BUTTON }]], resize_keyboard: true, is_persistent: true };
+export const REFRESH_BUTTON = "🔄 Оновити сайт";
+export const KEYBOARD = {
+  keyboard: [[{ text: CHECK_BUTTON }, { text: TTN_BUTTON }], [{ text: REFRESH_BUTTON }]],
+  resize_keyboard: true,
+  is_persistent: true,
+};
 
 // Секрет вебхука виводимо з токена бота, щоб не заводити ще одну змінну в Cloudflare.
 export async function webhookSecret() {
@@ -118,4 +124,12 @@ export async function handleTtnList(origin: string) {
 
 export async function handleSent(orderId: number) {
   await markSent(orderId);
+}
+
+// Те саме, що /api/revalidate: скидаємо збережені відповіді KeyCRM і готові сторінки,
+// щоб нові фото й ціни зʼявились одразу, а не через годину.
+export async function handleRefresh() {
+  revalidateTag("catalog", { expire: 0 });
+  revalidatePath("/", "layout");
+  await send("🔄 Сайт оновлено. Відкрийте сторінку товару ще раз: перше відкриття підтягне свіжі дані з KeyCRM.");
 }
