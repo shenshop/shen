@@ -158,11 +158,6 @@ body.scroll-lock { position: fixed; left: 0; right: 0; overflow: hidden; }
 .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 20px; scrollbar-width: none; }
 .chip { flex-shrink: 0; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 14px; font-weight: 500; }
 .chip:hover { border-color: var(--text); }
-.size-filter { display: flex; align-items: center; gap: 10px; margin: -8px 0 8px; }
-.size-filter .chips { margin-bottom: 12px; }
-.size-filter > span { flex-shrink: 0; padding-bottom: 8px; }
-button.chip { cursor: pointer; font-family: inherit; }
-button.chip:not(.chip-active) { color: inherit; }
 .chip-active { background: var(--text); color: #fff; border-color: var(--text); }
 
 .reviews { display: grid; gap: 12px; }
