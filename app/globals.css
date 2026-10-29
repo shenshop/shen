@@ -112,6 +112,8 @@ body.scroll-lock { position: fixed; left: 0; right: 0; overflow: hidden; }
 .qty span { min-width: 22px; text-align: center; font-weight: 600; }
 .cart-foot { padding-top: 16px; display: flex; flex-direction: column; gap: 8px; }
 .cart-total { display: flex; justify-content: space-between; font-size: 18px; }
+.cart-discount { display: flex; justify-content: space-between; font-size: 15px; color: var(--accent); margin-bottom: 6px; }
+.cart-discount-hint { margin: 0 0 8px; font-size: 14px; color: var(--accent); }
 
 /* Головна */
 .hero { padding: 24px 0 8px; }

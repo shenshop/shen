@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "./cart";
+import { PairDiscount } from "./pair-discount";
 import { getUtm, track } from "./analytics";
 import { sizeChartFor } from "@/data/sizes";
 import { formatPrice } from "@/lib/format";
@@ -236,6 +237,7 @@ export function CheckoutForm() {
             </li>
           ))}
         </ul>
+        <PairDiscount />
         <div className="cart-total">
           <span>Разом</span>
           <strong>{formatPrice(total)}</strong>

@@ -2,10 +2,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { CartItem } from "@/lib/types";
+import { pairDiscount } from "@/lib/discount";
 
 type CartState = {
   items: CartItem[];
   count: number;
+  /** Сума без знижки. */
+  subtotal: number;
+  discount: number;
   total: number;
   open: boolean;
   setOpen: (open: boolean) => void;
@@ -59,20 +63,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const remove = useCallback((variantId: number) => setItems((prev) => prev.filter((i) => i.variantId !== variantId)), []);
   const clear = useCallback(() => setItems([]), []);
 
-  const value = useMemo<CartState>(
-    () => ({
+  const value = useMemo<CartState>(() => {
+    const count = items.reduce((s, i) => s + i.quantity, 0);
+    const subtotal = items.reduce((s, i) => s + i.quantity * i.price, 0);
+    const discount = pairDiscount(count);
+    return {
       items,
-      count: items.reduce((s, i) => s + i.quantity, 0),
-      total: items.reduce((s, i) => s + i.quantity * i.price, 0),
+      count,
+      subtotal,
+      discount,
+      total: subtotal - discount,
       open,
       setOpen,
       add,
       setQuantity,
       remove,
       clear,
-    }),
-    [items, open, add, setQuantity, remove, clear],
-  );
+    };
+  }, [items, open, add, setQuantity, remove, clear]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

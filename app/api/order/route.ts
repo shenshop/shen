@@ -5,6 +5,7 @@ import { normalizePhone } from "@/lib/format";
 import type { OrderRequest } from "@/lib/types";
 import { orderMessage, orderPhotos, sendTelegram } from "@/lib/telegram";
 import { itemName } from "@/lib/variants";
+import { pairDiscount } from "@/lib/discount";
 
 const bad = (message: string) => NextResponse.json({ error: message }, { status: 400 });
 
@@ -43,7 +44,8 @@ export async function POST(req: Request) {
       image: [found.variant.image, found.product.images[0]].find((u) => u?.startsWith("http")) ?? "",
     });
   }
-  const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const discount = body.quick ? 0 : pairDiscount(items.reduce((sum, i) => sum + i.quantity, 0));
+  const total = items.reduce((sum, i) => sum + i.price * i.quantity, 0) - discount;
 
   const order: OrderRequest = {
     name,
@@ -54,6 +56,7 @@ export async function POST(req: Request) {
     items,
     utm: body.utm,
     quick: Boolean(body.quick),
+    discount: discount || undefined,
   };
 
   if (!keycrmEnabled()) {

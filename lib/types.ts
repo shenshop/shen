@@ -57,5 +57,7 @@ export type OrderRequest = {
   payment: "cod" | "prepay";
   items: Pick<CartItem, "sku" | "name" | "size" | "price" | "quantity" | "image">[];
   utm?: Record<string, string>;
+  /** Знижка за другу пару, грн (рахує сервер). */
+  discount?: number;
   quick?: boolean;
 };

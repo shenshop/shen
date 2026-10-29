@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useScrollLock } from "@/lib/scroll-lock";
 import { useCart } from "./cart";
+import { PairDiscount } from "./pair-discount";
 import { CloseIcon, MinusIcon, PlusIcon } from "./icons";
 import { formatPrice } from "@/lib/format";
 
@@ -60,6 +61,7 @@ export function CartDrawer() {
               ))}
             </ul>
             <div className="cart-foot">
+              <PairDiscount />
               <div className="cart-total">
                 <span>Разом</span>
                 <strong>{formatPrice(total)}</strong>

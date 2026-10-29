@@ -21,6 +21,7 @@ export function orderMessage(order: OrderRequest, total: number, crmId: number |
     `📞 ${esc(order.phone)}`,
     "",
     ...order.items.map((i) => `• ${esc(i.name)}, розмір ${esc(i.size)} × ${i.quantity} = ${formatPrice(i.price * i.quantity)}`),
+    order.discount ? `🎁 Знижка за другу пару: −${formatPrice(order.discount)}` : "",
     `<b>Разом: ${formatPrice(total)}</b>`,
   ];
   if (order.delivery) {

@@ -206,8 +206,10 @@ export async function createOrder(order: OrderRequest, total: number) {
     source_id: Number(env.KEYCRM_SOURCE_ID) || 1,
     buyer: { full_name: order.name, phone: order.phone },
     buyer_comment: order.comment || undefined,
+    discount_amount: order.discount || undefined,
     manager_comment: [
       order.quick ? "Швидке замовлення: передзвонити для уточнення доставки" : null,
+      order.discount ? `Знижка за другу пару −${order.discount} грн` : null,
       order.payment === "prepay" ? "Оплата: передоплата на картку" : "Оплата: накладений платіж",
     ]
       .filter(Boolean)
