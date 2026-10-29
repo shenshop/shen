@@ -62,6 +62,7 @@ export function CardBuy({ product, color, onColor }: { product: Product; color: 
       >
         Швидке замовлення
       </button>
+      <p className="quick-hint">Імʼя і телефон, ми передзвонимо</p>
       {quick && variant && <QuickOrder product={product} variant={variant} onClose={() => setQuick(false)} />}
     </div>
   );

@@ -100,6 +100,7 @@ export function ProductBuy({ product }: { product: Product }) {
             Швидке замовлення
           </button>
         </div>
+        <p className="quick-hint">«Швидке замовлення»: лише імʼя і телефон, ми передзвонимо й уточнимо доставку</p>
       </div>
 
       <div className="sticky-buy only-mobile">
