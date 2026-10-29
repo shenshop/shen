@@ -17,6 +17,27 @@ export async function webhookSecret() {
 const line = (o: PlannedOrder) =>
   `№${o.id}${o.awaitingDelivery ? " (чекаєм поставку)" : ""} · ${o.lines.map((l) => esc(l.sku) + (l.qty > 1 ? ` ×${l.qty}` : "")).join(", ")}${o.buyer ? ` · ${esc(o.buyer)}` : ""}`;
 
+// Артикул «221 кор-42» = модель «221 кор» + розмір «42». Групуємо, скільки пар кожного розміру треба.
+function needSummary(orders: PlannedOrder[]) {
+  const byModel = new Map<string, Map<string, number>>();
+  for (const o of orders) {
+    for (const l of o.lines) {
+      const m = l.sku.trim().match(/^(.*?)[-\s]+(\d{2}(?:[.,]5)?)$/);
+      const model = m ? m[1].trim() : l.sku.trim();
+      const size = m ? m[2] : "—";
+      const sizes = byModel.get(model) ?? new Map<string, number>();
+      sizes.set(size, (sizes.get(size) ?? 0) + l.qty);
+      byModel.set(model, sizes);
+    }
+  }
+  return [...byModel]
+    .map(([model, sizes]) => {
+      const list = [...sizes].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]) || a[0].localeCompare(b[0]));
+      return { model, sizes: list, total: list.reduce((sum, [, n]) => sum + n, 0) };
+    })
+    .sort((a, b) => a.model.localeCompare(b.model, "uk"));
+}
+
 const send = (text: string, extra: object = {}) =>
   telegram("sendMessage", { text: text.slice(0, 4000), parse_mode: "HTML", ...extra });
 
@@ -33,7 +54,14 @@ export async function handleCheck() {
       ...plan.readyOther.map((o) => `${line(o)} · ${esc(o.service)}`),
     );
   }
-  if (plan.waiting.length) lines.push("", `⏳ <b>Ще чекають товар (${plan.waiting.length}):</b>`, ...plan.waiting.map(line));
+  if (plan.waiting.length) {
+    const groups = needSummary(plan.waiting);
+    const pairs = groups.reduce((sum, g) => sum + g.total, 0);
+    lines.push("", `⏳ <b>Треба замовити (${pairs} пар, ${plan.waiting.length} замовлень):</b>`);
+    for (const g of groups) {
+      lines.push(`<b>${esc(g.model)}</b>: ${g.sizes.map(([size, n]) => `${esc(size)} — ${n}`).join(", ")}${g.sizes.length > 1 ? ` (разом ${g.total})` : ""}`);
+    }
+  }
   const n = Math.min(plan.ready.length, MAX_MOVES);
   await send(
     lines.join("\n"),
