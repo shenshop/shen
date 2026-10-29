@@ -32,8 +32,6 @@ export function CheckoutForm() {
   const [warehouse, setWarehouse] = useState<Warehouse | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Уточнення розміру: для кожного товару покупець підтверджує, що це його звичайний розмір.
-  const [fit, setFit] = useState<Record<number, string>>({});
   const tracked = useRef(false);
 
   useEffect(() => {
@@ -72,9 +70,7 @@ export function CheckoutForm() {
       };
     }
 
-    if (items.some((i) => !fit[i.variantId])) return setError("Підтвердіть, будь ласка, розмір");
-    const fitNote = items.map((i) => `Розмір ${i.size} (${i.name}): ${fit[i.variantId]}`).join("\n");
-    const comment = [fitNote, String(form.get("comment") ?? "").trim()].filter(Boolean).join("\n");
+    const comment = String(form.get("comment") ?? "").trim();
 
     setSending(true);
     try {
@@ -170,30 +166,14 @@ export function CheckoutForm() {
 
         <fieldset>
           <legend>Розмір</legend>
+          {/* Лише підказка про посадку; розмір Дрон уточнює з клієнтом у Viber. */}
           {items.map((i) => {
             const cm = sizeChartFor(i.name)[i.size];
-            const smaller = Number.isFinite(parseInt(i.size, 10)) ? String(parseInt(i.size, 10) - 1) : null;
-            const answers = ["Так, завжди " + i.size, ...(smaller ? ["Буває " + smaller] : []), "Не впевнений(а)"];
             return (
-              <div key={i.variantId} className="fit">
-                <p>
-                  {items.length > 1 && <b>{i.name}. </b>}
-                  Модель повномірна{cm ? `, ${i.size} = ${cm} см устілки` : ""}. Ви зазвичай носите {i.size}?
-                </p>
-                <div className="options">
-                  {answers.map((a) => (
-                    <label key={a} className={fit[i.variantId] === a ? "option option-active" : "option"}>
-                      <input
-                        type="radio"
-                        name={`fit-${i.variantId}`}
-                        checked={fit[i.variantId] === a}
-                        onChange={() => setFit((f) => ({ ...f, [i.variantId]: a }))}
-                      />
-                      <span>{a}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+              <p key={i.variantId} className="muted small fit-note">
+                {items.length > 1 && <b>{i.name}, розмір {i.size}. </b>}
+                Модель повномірна{cm ? `, ${i.size} = ${cm} см устілки` : ""}. Після замовлення ми ще уточнимо розмір у Viber.
+              </p>
             );
           })}
         </fieldset>
