@@ -160,10 +160,13 @@ body.scroll-lock { position: fixed; left: 0; right: 0; overflow: hidden; }
 .chip:hover { border-color: var(--text); }
 .chip-active { background: var(--text); color: #fff; border-color: var(--text); }
 
-.reviews { display: grid; gap: 12px; }
-@media (min-width: 900px) { .reviews { grid-template-columns: repeat(3, 1fr); } }
+.reviews-note { margin: -4px 0 16px; font-size: 14px; }
+/* На телефоні відгуки гортаються вбік, щоб 15 карток не розтягували сторінку. */
+.reviews { display: grid; grid-auto-flow: column; grid-auto-columns: 82%; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 8px; scrollbar-width: none; }
+.reviews .review { scroll-snap-align: start; }
+@media (min-width: 900px) { .reviews { grid-auto-flow: row; grid-template-columns: repeat(3, 1fr); overflow: visible; } }
 .review { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
-.review blockquote { margin: 8px 0 12px; }
+.review blockquote { margin: 0 0 12px; }
 .review figcaption { color: var(--muted); font-size: 14px; }
 .stars { color: var(--accent); letter-spacing: 2px; }
 

@@ -4,17 +4,13 @@ import Image from "next/image";
 import { getCatalog, getFeatured } from "@/lib/catalog";
 import { ProductCard } from "@/components/product-card";
 import { Benefits } from "@/components/benefits";
+import { reviews } from "@/data/reviews";
 
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 export const revalidate = 3600;
 
-const reviews = [
-  { name: "Олена, Київ", text: "Черевики прийшли за день, шкіра справжня, сидять ідеально. Беру вже другу пару." },
-  { name: "Ірина, Львів", text: "Не підійшов розмір, обміняли без питань. Дуже приємний сервіс." },
-  { name: "Андрій, Дніпро", text: "Кросівки легкі й зручні, за ці гроші якість чудова." },
-];
 
 export default async function Home() {
   const [featured, { categories }] = await Promise.all([getFeatured(), getCatalog()]);
@@ -79,12 +75,14 @@ export default async function Home() {
 
       <section className="container section" id="vidguky">
         <h2>Відгуки покупців</h2>
+        <p className="muted reviews-note">Повідомлення, які клієнти надіслали нам в Instagram і Viber після отримання взуття.</p>
         <div className="reviews">
-          {reviews.map((r) => (
-            <figure key={r.name} className="review">
-              <div className="stars" aria-label="5 з 5">★★★★★</div>
+          {reviews.map((r, i) => (
+            <figure key={i} className="review">
               <blockquote>{r.text}</blockquote>
-              <figcaption>{r.name}</figcaption>
+              <figcaption>
+                {r.who} · {r.where}
+              </figcaption>
             </figure>
           ))}
         </div>
