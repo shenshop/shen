@@ -4,18 +4,16 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCart } from "./cart";
 import { track } from "./analytics";
-import { QuickOrder } from "./product-buy";
 import type { Product } from "@/lib/types";
 import { colorsOf, itemName } from "@/lib/variants";
 import { ColorPicker } from "./color-picker";
 
-// Розміри та кнопки покупки прямо в картці каталогу, без переходу на сторінку товару.
+// Розміри та кнопка «Купити» прямо в картці каталогу; «Швидке замовлення» лише на сторінці товару.
 export function CardBuy({ product, color, onColor }: { product: Product; color: string; onColor: (c: string) => void }) {
   const { add } = useCart();
   const router = useRouter();
   const [variantId, setVariantId] = useState<number | null>(null);
   const [error, setError] = useState(false);
-  const [quick, setQuick] = useState(false);
   const colors = colorsOf(product);
   const shown = colors.length ? product.variants.filter((v) => v.color === color) : product.variants;
   const variant = product.variants.find((v) => v.id === variantId) ?? null;
@@ -56,14 +54,6 @@ export function CardBuy({ product, color, onColor }: { product: Product; color: 
       <button className="btn btn-dark btn-block card-btn" onClick={buy}>
         Купити
       </button>
-      <button
-        className="btn btn-light btn-block card-btn"
-        onClick={() => (variant ? setQuick(true) : setError(true))}
-      >
-        Швидке замовлення
-      </button>
-      <p className="quick-hint">Імʼя і телефон, ми передзвонимо</p>
-      {quick && variant && <QuickOrder product={product} variant={variant} onClose={() => setQuick(false)} />}
     </div>
   );
 }
