@@ -70,7 +70,8 @@ export async function handleTtnList(origin: string) {
     return send(
       `📮 Немає відправлених замовлень, яким ще не надіслали ТТН.\n\n` +
         `«Передано в доставку»: ${stats.inStatus}, з ТТН і телефоном: ${stats.withTtn}, ` +
-        `без тегу «ТТН надіслано»: ${stats.notSent}, за ${4} дні: ${stats.recent}`,
+        `без тегу «ТТН надіслано»: ${stats.notSent}, за ${4} дні: ${stats.recent}` +
+        (stats.inStatus && !stats.withTtn ? `\n${esc(stats.sample)}` : ""),
     );
   }
   await send(`📮 <b>Відправлені, клієнтам ще не надіслано ТТН: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);

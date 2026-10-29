@@ -4,7 +4,6 @@ import { request } from "./keycrm";
 // Відправлені замовлення, клієнтам яких ще не написали номер ТТН.
 // «Надіслано» позначаємо тегом у KeyCRM, тож список не повторюється.
 
-const SHIPPED_STATUS = "передано в доставку";
 const SHIPPED_STATUS_ID = 8;
 const SENT_TAG = "ттн надіслано";
 const RECENT_DAYS = 4;
@@ -22,7 +21,7 @@ const rows = <T>(r: List<T>) => (Array.isArray(r) ? r : r.data);
 const fresh = { cache: "no-store" as const };
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
-export let stats = { inStatus: 0, withTtn: 0, notSent: 0, recent: 0 };
+export let stats = { inStatus: 0, withTtn: 0, notSent: 0, recent: 0, sample: "" };
 
 // Час у KeyCRM в UTC: «2026-10-28 21:15:00» або ISO з «Z».
 function parseTime(v?: string) {
@@ -40,10 +39,8 @@ async function sentTagId() {
 }
 
 export async function ordersToNotify(): Promise<TtnNotice[]> {
-  const statuses = rows(await request<List<Named>>("/order/status?limit=50", fresh));
-  // Статус «Передано в доставку» у KeyCRM має номер 8; назву перевіряємо як запасний варіант.
-  const shippedId =
-    statuses.find((s) => norm(s.name) === SHIPPED_STATUS || /передан\S*\s+(в|у)\s+доставк/i.test(s.name))?.id ?? SHIPPED_STATUS_ID;
+  // «Передано в доставку» у KeyCRM — статус №8 (за назвою шукати не можна: є схожі назви).
+  const shippedId = SHIPPED_STATUS_ID;
   const tagId = await sentTagId();
   const services = rows(await request<List<Named>>("/order/delivery-service?limit=50", fresh));
   const novaIds = new Set(services.filter((s) => /^нп$|нова\s*пошта/i.test(s.name.trim())).map((s) => s.id));
@@ -62,7 +59,13 @@ export async function ordersToNotify(): Promise<TtnNotice[]> {
     return Number.isNaN(t) || t >= since;
   });
   // Коли список порожній, пояснюємо чому: так легше помітити, якщо KeyCRM віддає дані інакше.
-  stats = { inStatus: orders.length, withTtn: withTtn.length, notSent: notSent.length, recent: recent.length };
+  stats = {
+    inStatus: orders.length,
+    withTtn: withTtn.length,
+    notSent: notSent.length,
+    recent: recent.length,
+    sample: orders[0] ? `shipping: ${Object.keys(orders[0].shipping ?? {}).join(",")}; buyer: ${Object.keys(orders[0].buyer ?? {}).join(",")}` : "",
+  };
   return recent
     .reverse()
     .map((o) => ({
