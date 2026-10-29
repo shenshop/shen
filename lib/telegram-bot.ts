@@ -1,7 +1,7 @@
 import "server-only";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveOrders, type PlannedOrder } from "./stock-check";
-import { customerText, markSent, ordersToNotify, viberDigits } from "./ttn-notify";
+import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./ttn-notify";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
 export const TTN_BUTTON = "📮 ТТН клієнтам";
@@ -66,7 +66,13 @@ export async function handleMove() {
 // кнопка відкрити чат у Viber і кнопка «Надіслано», яка ставить тег у KeyCRM.
 export async function handleTtnList(origin: string) {
   const list = await ordersToNotify();
-  if (!list.length) return send("📮 Немає відправлених замовлень, яким ще не надіслали ТТН.");
+  if (!list.length) {
+    return send(
+      `📮 Немає відправлених замовлень, яким ще не надіслали ТТН.\n\n` +
+        `«Передано в доставку»: ${stats.inStatus}, з ТТН і телефоном: ${stats.withTtn}, ` +
+        `без тегу «ТТН надіслано»: ${stats.notSent}, за ${4} дні: ${stats.recent}`,
+    );
+  }
   await send(`📮 <b>Відправлені, клієнтам ще не надіслано ТТН: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
   for (const n of list) {
     await send(`<b>№${n.id}</b>${n.buyer ? ` · ${esc(n.buyer)}` : ""} · ${esc(n.phone)}\n\n<code>${esc(customerText(n))}</code>`, {

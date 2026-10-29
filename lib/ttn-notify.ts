@@ -22,6 +22,14 @@ const rows = <T>(r: List<T>) => (Array.isArray(r) ? r : r.data);
 const fresh = { cache: "no-store" as const };
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
+export let stats = { inStatus: 0, withTtn: 0, notSent: 0, recent: 0 };
+
+// Час у KeyCRM в UTC: «2026-10-28 21:15:00» або ISO з «Z».
+function parseTime(v?: string) {
+  if (!v) return NaN;
+  return Date.parse(/[TZ+]/.test(v) ? v : v.replace(" ", "T") + "Z");
+}
+
 export type TtnNotice = { id: number; buyer: string; phone: string; ttn: string; nova: boolean };
 
 async function sentTagId() {
@@ -46,12 +54,16 @@ export async function ordersToNotify(): Promise<TtnNotice[]> {
       fresh,
     ),
   );
-  // Час у KeyCRM в UTC: «2026-10-28 21:15:00».
   const since = Date.now() - RECENT_DAYS * 86400_000;
-  return orders
-    .filter((o) => o.shipping?.tracking_code && o.buyer?.phone)
-    .filter((o) => !(o.tags ?? []).some((t) => t.id === tagId))
-    .filter((o) => !o.updated_at || Date.parse(o.updated_at.replace(" ", "T") + "Z") >= since)
+  const withTtn = orders.filter((o) => o.shipping?.tracking_code && o.buyer?.phone);
+  const notSent = withTtn.filter((o) => !(o.tags ?? []).some((t) => t.id === tagId));
+  const recent = notSent.filter((o) => {
+    const t = parseTime(o.updated_at);
+    return Number.isNaN(t) || t >= since;
+  });
+  // Коли список порожній, пояснюємо чому: так легше помітити, якщо KeyCRM віддає дані інакше.
+  stats = { inStatus: orders.length, withTtn: withTtn.length, notSent: notSent.length, recent: recent.length };
+  return recent
     .reverse()
     .map((o) => ({
       id: o.id,
