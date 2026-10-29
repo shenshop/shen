@@ -5,6 +5,7 @@ import { request } from "./keycrm";
 // «Надіслано» позначаємо тегом у KeyCRM, тож список не повторюється.
 
 const SHIPPED_STATUS = "передано в доставку";
+const SHIPPED_STATUS_ID = 8;
 const SENT_TAG = "ттн надіслано";
 const RECENT_DAYS = 4;
 
@@ -32,8 +33,9 @@ async function sentTagId() {
 
 export async function ordersToNotify(): Promise<TtnNotice[]> {
   const statuses = rows(await request<List<Named>>("/order/status?limit=50", fresh));
-  const shippedId = statuses.find((s) => norm(s.name) === SHIPPED_STATUS)?.id;
-  if (!shippedId) throw new Error("У KeyCRM не знайдено статус «Передано в доставку»");
+  // Статус «Передано в доставку» у KeyCRM має номер 8; назву перевіряємо як запасний варіант.
+  const shippedId =
+    statuses.find((s) => norm(s.name) === SHIPPED_STATUS || /передан\S*\s+(в|у)\s+доставк/i.test(s.name))?.id ?? SHIPPED_STATUS_ID;
   const tagId = await sentTagId();
   const services = rows(await request<List<Named>>("/order/delivery-service?limit=50", fresh));
   const novaIds = new Set(services.filter((s) => /^нп$|нова\s*пошта/i.test(s.name.trim())).map((s) => s.id));
