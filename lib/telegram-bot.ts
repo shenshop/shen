@@ -1,8 +1,11 @@
 import "server-only";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveOrders, type PlannedOrder } from "./stock-check";
+import { customerText, markSent, ordersToNotify, viberDigits } from "./ttn-notify";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
+export const TTN_BUTTON = "📮 ТТН клієнтам";
+export const KEYBOARD = { keyboard: [[{ text: CHECK_BUTTON }, { text: TTN_BUTTON }]], resize_keyboard: true, is_persistent: true };
 
 // Секрет вебхука виводимо з токена бота, щоб не заводити ще одну змінну в Cloudflare.
 export async function webhookSecret() {
@@ -57,4 +60,27 @@ export async function handleMove() {
   if (error) lines.push("", `⚠️ KeyCRM не прийняв зміну: ${esc(error.slice(0, 300))}`);
   if (left > 0) lines.push("", `Ще ${left} можна перевести. Натисніть «${CHECK_BUTTON}» через хвилину (ліміт KeyCRM).`);
   await send(lines.join("\n"));
+}
+
+// Кожне відправлене замовлення окремим повідомленням: текст для клієнта (торкнутися, щоб скопіювати),
+// кнопка відкрити чат у Viber і кнопка «Надіслано», яка ставить тег у KeyCRM.
+export async function handleTtnList(origin: string) {
+  const list = await ordersToNotify();
+  if (!list.length) return send("📮 Немає відправлених замовлень, яким ще не надіслали ТТН.");
+  await send(`📮 <b>Відправлені, клієнтам ще не надіслано ТТН: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
+  for (const n of list) {
+    await send(`<b>№${n.id}</b>${n.buyer ? ` · ${esc(n.buyer)}` : ""} · ${esc(n.phone)}\n\n<code>${esc(customerText(n))}</code>`, {
+      link_preview_options: { is_disabled: true },
+      reply_markup: {
+        inline_keyboard: [[
+          { text: "💬 Відкрити Viber", url: `${origin}/viber/${viberDigits(n.phone)}` },
+          { text: "✅ Надіслано", callback_data: `sent:${n.id}` },
+        ]],
+      },
+    });
+  }
+}
+
+export async function handleSent(orderId: number) {
+  await markSent(orderId);
 }

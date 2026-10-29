@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { telegram, telegramEnabled } from "@/lib/telegram";
-import { CHECK_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { KEYBOARD, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -14,10 +14,15 @@ export async function GET(req: Request) {
     secret_token: await webhookSecret(),
     allowed_updates: ["message", "callback_query"],
   });
-  await telegram("setMyCommands", { commands: [{ command: "sklad", description: "Перевірити склад" }] });
+  await telegram("setMyCommands", {
+    commands: [
+      { command: "sklad", description: "Перевірити склад" },
+      { command: "ttn", description: "ТТН клієнтам" },
+    ],
+  });
   const keyboard = await telegram("sendMessage", {
-    text: "Кнопка «Перевірити склад» тепер внизу чату. Натисніть її після приходу товару.",
-    reply_markup: { keyboard: [[{ text: CHECK_BUTTON }]], resize_keyboard: true, is_persistent: true },
+    text: "Кнопки внизу чату: «📦 Перевірити склад» після приходу товару і «📮 ТТН клієнтам» після відправки.",
+    reply_markup: KEYBOARD,
   });
   return NextResponse.json({ ok: webhook && keyboard, webhook: `${origin}/api/telegram` });
 }
