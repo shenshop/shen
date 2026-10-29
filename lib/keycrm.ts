@@ -196,7 +196,7 @@ export async function createOrder(order: OrderRequest, total: number) {
   const env = process.env;
   const delivery = order.delivery;
   const deliveryServiceId =
-    delivery?.service === "novaposhta"
+    delivery?.service === "novaposhta" || delivery?.service === "novaposhta_courier"
       ? Number(env.KEYCRM_NOVAPOSHTA_ID) || undefined
       : delivery?.service === "ukrposhta"
         ? Number(env.KEYCRM_UKRPOSHTA_ID) || undefined
@@ -209,6 +209,7 @@ export async function createOrder(order: OrderRequest, total: number) {
     discount_amount: order.discount || undefined,
     manager_comment: [
       order.quick ? "Швидке замовлення: передзвонити для уточнення доставки" : null,
+      delivery?.service === "novaposhta_courier" ? "Нова Пошта: адресна доставка курʼєром" : null,
       order.discount ? `Знижка за другу пару −${order.discount} грн` : null,
       order.payment === "prepay" ? "Оплата: передоплата на картку" : "Оплата: накладений платіж",
     ]
@@ -217,7 +218,7 @@ export async function createOrder(order: OrderRequest, total: number) {
     shipping: delivery
       ? {
           delivery_service_id: deliveryServiceId,
-          shipping_service: delivery.service === "novaposhta" ? "Нова Пошта" : "Укрпошта",
+          shipping_service: delivery.service === "ukrposhta" ? "Укрпошта" : "Нова Пошта",
           shipping_address_city: delivery.city,
           shipping_address_country: "Ukraine",
           shipping_address_zip: delivery.zip || undefined,

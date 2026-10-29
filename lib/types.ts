@@ -40,7 +40,8 @@ export type CartItem = {
   quantity: number;
 };
 
-export type DeliveryService = "novaposhta" | "ukrposhta";
+/** novaposhta_courier: Нова Пошта, адресна доставка курʼєром. */
+export type DeliveryService = "novaposhta" | "novaposhta_courier" | "ukrposhta";
 
 export type OrderRequest = {
   name: string;

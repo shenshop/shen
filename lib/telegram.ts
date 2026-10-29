@@ -25,7 +25,8 @@ export function orderMessage(order: OrderRequest, total: number, crmId: number |
     `<b>Разом: ${formatPrice(total)}</b>`,
   ];
   if (order.delivery) {
-    const service = order.delivery.service === "ukrposhta" ? "Укрпошта" : "Нова Пошта";
+    const service =
+      order.delivery.service === "ukrposhta" ? "Укрпошта" : order.delivery.service === "novaposhta_courier" ? "Нова Пошта, курʼєр" : "Нова Пошта";
     lines.push("", `🚚 ${service}: ${esc(order.delivery.city)}, ${esc(order.delivery.point)}`);
     lines.push(order.payment === "prepay" ? "💳 Передоплата" : "💵 Накладений платіж");
   }

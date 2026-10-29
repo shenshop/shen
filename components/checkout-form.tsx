@@ -61,6 +61,15 @@ export function CheckoutForm() {
     if (service === "novaposhta") {
       if (!city || !warehouse) return setError("Оберіть місто та відділення Нової Пошти");
       delivery = { service, city: city.name, cityRef: city.ref, point: warehouse.name, warehouseRef: warehouse.ref };
+    } else if (service === "novaposhta_courier") {
+      if (!city) return setError("Оберіть місто");
+      const flat = String(form.get("np_flat") ?? "").trim();
+      delivery = {
+        service,
+        city: city.name,
+        cityRef: city.ref,
+        point: `Курʼєр: ${String(form.get("np_street") ?? "").trim()}, буд. ${String(form.get("np_house") ?? "").trim()}${flat ? `, кв. ${flat}` : ""}`,
+      };
     } else {
       delivery = {
         service,
@@ -126,11 +135,16 @@ export function CheckoutForm() {
 
         <fieldset>
           <legend>Доставка</legend>
-          <div className="options">
+          <div className="options delivery-options">
             <label className={service === "novaposhta" ? "option option-active" : "option"}>
               <input type="radio" name="service" checked={service === "novaposhta"} onChange={() => setService("novaposhta")} />
               <span>Нова Пошта</span>
               <small>відділення або поштомат</small>
+            </label>
+            <label className={service === "novaposhta_courier" ? "option option-active" : "option"}>
+              <input type="radio" name="service" checked={service === "novaposhta_courier"} onChange={() => setService("novaposhta_courier")} />
+              <span>Нова Пошта</span>
+              <small>курʼєр на адресу</small>
             </label>
             <label className={service === "ukrposhta" ? "option option-active" : "option"}>
               <input type="radio" name="service" checked={service === "ukrposhta"} onChange={() => setService("ukrposhta")} />
@@ -149,6 +163,24 @@ export function CheckoutForm() {
                 }}
               />
               {city && <WarehouseSearch cityRef={city.ref} value={warehouse} onChange={setWarehouse} />}
+            </>
+          ) : service === "novaposhta_courier" ? (
+            <>
+              <CitySearch value={city} onChange={setCity} />
+              <label className="field">
+                <span>Вулиця</span>
+                <input name="np_street" required autoComplete="address-line1" />
+              </label>
+              <div className="field-row">
+                <label className="field">
+                  <span>Будинок</span>
+                  <input name="np_house" required />
+                </label>
+                <label className="field">
+                  <span>Квартира</span>
+                  <input name="np_flat" placeholder="необовʼязково" />
+                </label>
+              </div>
             </>
           ) : (
             <div className="field-row">

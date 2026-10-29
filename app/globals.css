@@ -233,6 +233,8 @@ body.scroll-lock { position: fixed; left: 0; right: 0; overflow: hidden; }
 fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
 legend { font-weight: 700; font-size: 20px; margin-bottom: 12px; padding: 0; }
 .options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.delivery-options { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.delivery-options .option { padding: 12px 10px; }
 .option { display: flex; flex-direction: column; gap: 2px; padding: 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface); cursor: pointer; }
 .option input { position: absolute; opacity: 0; pointer-events: none; }
 .option span { font-weight: 600; }
