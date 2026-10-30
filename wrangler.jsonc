@@ -22,5 +22,7 @@
     "TELEGRAM_CHAT_ID": "413905782"
   },
   "keep_vars": true,
+  // Щодня о 10:00 за Києвом взимку (08:00 UTC; влітку це 11:00) — нагадування про незабрані посилки.
+  "triggers": { "crons": ["0 8 * * *"] },
   "observability": { "enabled": true }
 }

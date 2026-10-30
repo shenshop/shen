@@ -7,7 +7,23 @@ export { DOQueueHandler, DOShardedTagCache, BucketCachePurge } from "./.open-nex
 
 const IMAGE_TTL = 60 * 60 * 24 * 30;
 
+// Той самий секрет, що й у вебхука бота (lib/telegram-bot.ts → webhookSecret).
+async function botSecret(env) {
+  const data = new TextEncoder().encode(`shen-webhook:${env.TELEGRAM_BOT_TOKEN}`);
+  const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  return [...hash.slice(0, 16)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export default {
+  // Раз на день (crons у wrangler.jsonc): бот нагадує про посилки, які клієнти не забирають.
+  async scheduled(event, env, ctx) {
+    const req = new Request("https://khoda.com.ua/api/telegram/daily", {
+      method: "POST",
+      headers: { "x-telegram-bot-api-secret-token": await botSecret(env) },
+    });
+    await handler.fetch(req, env, ctx);
+  },
+
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname !== "/_next/image" || request.method !== "GET") return handler.fetch(request, env, ctx);

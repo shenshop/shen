@@ -3,14 +3,16 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveOrders, type PlannedOrder } from "./stock-check";
 import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./ttn-notify";
-import { markRefusalDone, refusals, refusalText } from "./refusals";
+import { refusals, refusalText } from "./refusals";
+import { pickupsWaiting, pickupText } from "./pickup-reminder";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
 export const TTN_BUTTON = "📮 ТТН клієнтам";
 export const REFRESH_BUTTON = "🔄 Оновити сайт";
 export const REFUSALS_BUTTON = "↩️ Відмови";
+export const PICKUP_BUTTON = "📬 Не забрали";
 export const KEYBOARD = {
-  keyboard: [[{ text: CHECK_BUTTON }, { text: TTN_BUTTON }], [{ text: REFUSALS_BUTTON }, { text: REFRESH_BUTTON }]],
+  keyboard: [[{ text: CHECK_BUTTON }, { text: TTN_BUTTON }], [{ text: REFUSALS_BUTTON }, { text: PICKUP_BUTTON }], [{ text: REFRESH_BUTTON }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -137,6 +139,26 @@ export async function handleRefusals(origin: string) {
           inline_keyboard: [[
             { text: "💬 Відкрити Viber", url: `${origin}/viber/${viberDigits(r.phone)}` },
             { text: "✅ Написав", callback_data: `refused:${r.id}` },
+          ]],
+        },
+      },
+    );
+  }
+}
+
+// Посилки, що лежать у відділенні з 3-го дня. quiet: щоденна перевірка мовчить, коли список порожній.
+export async function handlePickups(origin: string, quiet = false) {
+  const list = await pickupsWaiting();
+  if (!list.length) return quiet ? undefined : send("📬 Немає посилок, які лежать у відділенні 3-й день і довше.");
+  await send(`📬 <b>Посилки чекають у відділенні, клієнт не забрав: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
+  for (const p of list) {
+    await send(
+      `<b>№${p.id}</b>${p.buyer ? ` · ${esc(p.buyer)}` : ""} · ${p.days}-й день у відділенні${p.storageFrom ? `, платне зберігання з ${esc(p.storageFrom)}` : ""}\n📞 <code>${esc(p.phone)}</code>\n\n<code>${esc(pickupText(p))}</code>`,
+      {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "💬 Відкрити Viber", url: `${origin}/viber/${viberDigits(p.phone)}` },
+            { text: "✅ Написав", callback_data: `reminded:${p.id}` },
           ]],
         },
       },
