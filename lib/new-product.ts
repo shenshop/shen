@@ -46,6 +46,36 @@ function parseSizes(s: string): string[] {
   return s.replace(/(\d{2}),5\b/g, "$1.5").split(/[,;\s]+/).filter((x) => /^\d{2}(\.5)?$/.test(x));
 }
 
+type KCategory = { id: number; name: string; parent_id?: number | null };
+
+// Категорія з підпису: «Черевики», «Жіночі черевики» або «Жіноче взуття / Черевики».
+// Підкатегорії з однаковою назвою (Черевики в жіночому і в чоловічому) розрізняємо за словом батьківської.
+function pickCategory(query: string, list: KCategory[]): { id: number; name: string } | { error: string } {
+  const byId = new Map(list.map((c) => [c.id, c]));
+  const path = (c: KCategory) => {
+    const parent = c.parent_id ? byId.get(c.parent_id) : undefined;
+    return parent ? `${parent.name} › ${c.name}` : c.name;
+  };
+  // Перші 4 літери кожного слова: «жіночі» і «жіноче» дають однакове «жіно».
+  const stems = (s: string) => norm(s).split(/[^\p{L}\d]+/u).filter((w) => w.length > 1).map((w) => w.slice(0, 4));
+  const q = stems(query);
+  const covers = (c: KCategory) => stems(c.name).every((w) => q.includes(w));
+  const exact = list.filter((c) => norm(c.name) === norm(query) || norm(path(c)) === norm(query));
+  const candidates = exact.length ? exact : list.filter(covers);
+  // Серед схожих лишаємо ті, де названо й батьківську категорію; якщо такої немає — всі.
+  const withParent = candidates.filter((c) => {
+    const parent = c.parent_id ? byId.get(c.parent_id) : undefined;
+    return parent && stems(parent.name).some((w) => q.includes(w));
+  });
+  const pool = withParent.length ? withParent : candidates;
+  // Найточніша — та, що покриває найбільше слів запиту.
+  const score = (c: KCategory) => stems(path(c)).filter((w) => q.includes(w)).length;
+  const best = pool.filter((c) => score(c) === Math.max(...pool.map(score)));
+  if (best.length === 1) return { id: best[0].id, name: path(best[0]) };
+  const names = (best.length ? best : list).map(path).join(", ");
+  return { error: best.length ? `Категорія «${query}» підходить до кількох: ${names}. Напишіть точніше, наприклад «Жіночі черевики».` : `У KeyCRM немає категорії «${query}». Є: ${names}.` };
+}
+
 export async function parseNewProduct(text: string): Promise<{ product?: NewProduct; error?: string }> {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   let sku = "", sizes: string[] = [], price = 0, purchasedPrice: number | undefined, categoryName = "";
@@ -87,10 +117,9 @@ export async function parseNewProduct(text: string): Promise<{ product?: NewProd
 
   let category: NewProduct["category"];
   if (categoryName) {
-    const list = rows(await request<List<{ id: number; name: string }>>("/products/categories?limit=50", fresh));
-    const found = list.find((c) => norm(c.name) === norm(categoryName));
-    if (!found) return { error: `У KeyCRM немає категорії «${categoryName}». Є: ${list.map((c) => c.name).join(", ")}.` };
-    category = { id: found.id, name: found.name };
+    const found = pickCategory(categoryName, rows(await request<List<KCategory>>("/products/categories?limit=50", fresh)));
+    if ("error" in found) return found;
+    category = found;
   }
 
   // Артикули розмірів «135-40» не повинні вже бути в каталозі, інакше вийде дубль.
