@@ -277,30 +277,49 @@ type KProductRow = { id: number; name: string; sku?: string | null; attachments_
 type KOfferRow = KOffer & { product_id: number; image_url?: string | null; thumbnail_url?: string | null };
 
 /** Товар за артикулом товару (1193 чорні) або артикулом розміру (1193 чорні-38). */
-export async function findProduct(sku: string): Promise<{ product?: KProductRow; offers?: KOfferRow[]; error?: string }> {
-  const all: KProductRow[] = [];
-  for (let page = 1; page <= 10; page++) {
-    const res = await request<{ data: KProductRow[]; last_page?: number }>(`/products?limit=50&page=${page}&filter[is_archived]=false`, fresh);
-    all.push(...res.data);
+// Артикул без пробілів, дефісів і з кириличними літерами замість схожих латинських:
+// «к-10», «К10» і «k10» (латинська) — один і той самий артикул.
+const canon = (s: string | null | undefined) =>
+  norm(s)
+    .replace(/[\s\-–—_.]/g, "")
+    .replace(/[aceiopxykmhtb]/g, (c) => ({ a: "а", c: "с", e: "е", i: "і", o: "о", p: "р", x: "х", y: "у", k: "к", m: "м", h: "н", t: "т", b: "в" })[c]!);
+// Артикул розміру без розміру в кінці: «к10 чорні-40» → «к10 чорні».
+const baseSku = (sku: string | null | undefined) => (sku ?? "").replace(/[-\s]+\d{2}(?:[.,]5)?\s*$/, "");
+
+async function allPages<T>(path: string): Promise<T[]> {
+  const out: T[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const res = await request<{ data: T[]; last_page?: number }>(`${path}&limit=50&page=${page}`, fresh);
+    out.push(...res.data);
     if (!res.last_page || page >= res.last_page) break;
   }
-  let product = all.find((p) => p.sku && norm(p.sku) === norm(sku));
-  if (!product) {
-    const offer = rows(await request<List<KOfferRow>>(`/offers?filter[sku]=${encodeURIComponent(sku)}&limit=5`, fresh)).find((o) => norm(o.sku) === norm(sku));
-    if (offer) product = all.find((p) => p.id === offer.product_id);
+  return out;
+}
+
+/** Товар за артикулом товару (1193 чорні), розміру (1193 чорні-38) або його початком (к10 → к10 чорні). */
+export async function findProduct(sku: string): Promise<{ product?: KProductRow; offers?: KOfferRow[]; error?: string }> {
+  const [products, allOffers] = await Promise.all([
+    allPages<KProductRow>("/products?filter[is_archived]=false"),
+    allPages<KOfferRow>("/offers?filter[is_archived]=false"),
+  ]);
+  const q = canon(sku);
+  const idsWhere = (test: (code: string) => boolean) =>
+    new Set([
+      ...products.filter((p) => test(canon(p.sku))).map((p) => p.id),
+      ...allOffers.filter((o) => test(canon(o.sku)) || test(canon(baseSku(o.sku)))).map((o) => o.product_id),
+    ]);
+  // Точний збіг і збіги за початком разом: «к10» підходить і до «к10» (білі), і до «к10 чорні» — тоді перепитуємо.
+  const ids = idsWhere((code) => code.startsWith(q));
+  const found = products.filter((p) => ids.has(p.id));
+  if (!found.length) return { error: `У KeyCRM немає товару з артикулом «${sku}».` };
+  if (found.length > 1) {
+    const codes = (id: number) => baseSku(allOffers.find((o) => o.product_id === id)?.sku) || products.find((p) => p.id === id)?.sku || "";
+    return {
+      error: `Під «${sku}» підходить кілька товарів: ${found.map((p) => `${p.name} (${codes(p.id)})`).join("; ")}. Напишіть артикул точніше, наприклад «Фото ${codes(found[0].id)}».`,
+    };
   }
-  if (!product) {
-    // У старих товарів артикул є лише в розмірах («221 кор-42»): шукаємо розмір, що починається з «221 кор-».
-    for (let page = 1; page <= 10 && !product; page++) {
-      const res = await request<{ data: KOfferRow[]; last_page?: number }>(`/offers?limit=50&page=${page}&filter[is_archived]=false`, fresh);
-      const hit = res.data.find((o) => norm(o.sku).startsWith(`${norm(sku)}-`));
-      if (hit) product = all.find((p) => p.id === hit.product_id);
-      if (!res.last_page || page >= res.last_page) break;
-    }
-  }
-  if (!product) return { error: `У KeyCRM немає товару з артикулом «${sku}».` };
-  const offers = rows(await request<List<KOfferRow>>(`/offers?filter[product_id]=${product.id}&limit=50`, fresh));
-  return { product, offers };
+  const product = found[0];
+  return { product, offers: allOffers.filter((o) => o.product_id === product.id) };
 }
 
 export async function replacePhotos(productId: number, pictures: string[]) {
