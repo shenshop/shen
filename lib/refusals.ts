@@ -6,7 +6,7 @@ import { request } from "./keycrm";
 // тож одного клієнта бот не показує двічі.
 
 const DONE_TAG = "відмова уточнена";
-const RECENT_DAYS = 2;
+const RECENT_HOURS = 10;
 const REFUSAL_STATUS = /відмов|поверн|поверт/i;
 
 type Named = { id: number; name: string };
@@ -50,7 +50,7 @@ export async function refusals(): Promise<{ list: Refusal[]; statuses: string[] 
       fresh,
     ),
   );
-  const since = Date.now() - RECENT_DAYS * 86400_000;
+  const since = Date.now() - RECENT_HOURS * 3600_000;
   const list = orders
     .filter((o) => o.buyer?.phone && !(o.tags ?? []).some((t) => t.id === tagId))
     .filter((o) => {
