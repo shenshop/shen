@@ -264,6 +264,7 @@ export async function handleProductCreate(originalText: string, group: string, o
   const warn = [
     r.sizes.length !== product.sizes.length ? `⚠️ Розмірів збереглося ${r.sizes.length} з ${product.sizes.length}.` : "",
     r.photos < pictures.length ? `⚠️ Фото збереглося ${r.photos} з ${pictures.length}.` : "",
+    r.blank ? "⚠️ У картці лишився варіант без розміру, видаліть його вручну." : "",
     r.onSite ? "" : "⚠️ Галочка «На сайт» не поставилась, поставте її в картці вручну.",
   ].filter(Boolean);
   await send(

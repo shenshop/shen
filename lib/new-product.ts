@@ -130,7 +130,7 @@ export async function createNewProduct(p: NewProduct, pictures: string[]) {
       currency_code: "UAH",
       category_id: p.category?.id,
       pictures,
-      custom_fields: [{ uuid: ON_SITE_FIELD, value: true }],
+      custom_fields: [{ uuid: ON_SITE_FIELD, value: "1" }],
     }),
   });
 
@@ -140,16 +140,7 @@ export async function createNewProduct(p: NewProduct, pictures: string[]) {
     purchased_price: p.purchasedPrice,
     properties: [{ name: "Розмір", value: size }],
   });
-  // KeyCRM сам створює одну пропозицію без розміру; робимо з неї перший розмір, щоб не лишилась зайва.
-  const existing = rows(await request<List<KOffer>>(`/offers?filter[product_id]=${created.id}&limit=50`, fresh));
-  const blank = existing.find((o) => !o.properties?.length);
-  const sizes = [...p.sizes];
-  if (blank) {
-    await request(`/offers/${blank.id}`, { method: "PUT", ...fresh, body: JSON.stringify(variant(sizes.shift()!)) });
-  }
-  if (sizes.length) {
-    await request("/offers", { method: "POST", ...fresh, body: JSON.stringify({ product_id: created.id, offers: sizes.map(variant) }) });
-  }
+  await request(`/products/${created.id}/offers`, { method: "POST", ...fresh, body: JSON.stringify({ offers: p.sizes.map(variant) }) });
 
   // Перечитуємо, щоб показати Дрону, що справді збереглося.
   const saved = await request<{ id: number; attachments_data?: string[] | null; custom_fields?: { uuid?: string; value?: unknown }[] }>(
@@ -162,6 +153,8 @@ export async function createNewProduct(p: NewProduct, pictures: string[]) {
     id: created.id,
     photos: saved.attachments_data?.length ?? 0,
     sizes: offers.filter((o) => o.properties?.length).map((o) => o.properties![0].value),
+    // Варіант без розміру, якщо KeyCRM лишив базовий після додавання розмірів (через API його не прибрати).
+    blank: offers.some((o) => !o.properties?.length),
     onSite: onSite != null && onSite !== false && onSite !== 0 && onSite !== "0" && onSite !== "",
   };
 }
