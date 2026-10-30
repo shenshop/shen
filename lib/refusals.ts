@@ -2,12 +2,13 @@ import "server-only";
 import { request } from "./keycrm";
 
 // Замовлення, від яких клієнт відмовився на пошті (посилка повертається).
-// Статуси шукаємо за назвою («Відмова…», «Повернення…»), а «Написав» позначаємо тегом у KeyCRM,
+// Статус шукаємо за назвою, а «Написав» позначаємо тегом у KeyCRM,
 // тож одного клієнта бот не показує двічі.
 
 const DONE_TAG = "відмова уточнена";
 const RECENT_HOURS = 10;
-const REFUSAL_STATUS = /відмов|поверн|поверт/i;
+// Лише «Відмова від отримання»: скасовані та інші повернення сюди не потрапляють.
+const REFUSAL_STATUS = /^відмова від отриман/i;
 
 type Named = { id: number; name: string };
 type KOrder = {
@@ -38,9 +39,9 @@ async function doneTagId() {
 
 export async function refusals(): Promise<{ list: Refusal[]; statuses: string[] }> {
   const all = rows(await request<List<Named>>("/order/status?limit=50", fresh));
-  const matched = all.filter((s) => REFUSAL_STATUS.test(s.name));
+  const matched = all.filter((s) => REFUSAL_STATUS.test(s.name.trim()));
   if (!matched.length) {
-    throw new Error(`Не знайшов статус відмови. Статуси в KeyCRM: ${all.map((s) => s.name).join(", ")}`);
+    throw new Error(`Не знайшов статус «Відмова від отримання». Статуси в KeyCRM: ${all.map((s) => s.name).join(", ")}`);
   }
   const names = new Map(matched.map((s) => [s.id, s.name]));
   const tagId = await doneTagId();
