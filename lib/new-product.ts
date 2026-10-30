@@ -7,9 +7,10 @@ import { request } from "./keycrm";
 //   Артикул 135
 //   Розміри 40-45                          ← або 36, 37, 38
 //   Ціна 3200
-//   Закупка 1600                           ← необовʼязково
+//   Закупка 1600
 //   Категорія Черевики                     ← необовʼязково
-//   решта рядків іде в опис
+//   решта рядків іде в опис (обовʼязково)
+// Вага і коробка однакові для всіх пар: 2000 г, 30×20×20 см.
 // Нічого не створюємо, поки Дрон не натисне «Створити» під перевіркою.
 
 const fresh = { cache: "no-store" as const };
@@ -17,13 +18,15 @@ type List<T> = T[] | { data: T[] };
 const rows = <T>(r: List<T>) => (Array.isArray(r) ? r : r.data);
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 const ON_SITE_FIELD = "CT_1006";
+// Одиниці з налаштувань KeyCRM: грами і сантиметри.
+const BOX = { weight: 2000, length: 30, width: 20, height: 20 };
 
 export type NewProduct = {
   name: string;
   sku: string;
   sizes: string[];
   price: number;
-  purchasedPrice?: number;
+  purchasedPrice: number;
   category?: { id: number; name: string };
   description: string;
 };
@@ -48,12 +51,12 @@ export async function parseNewProduct(text: string): Promise<{ product?: NewProd
   let sku = "", sizes: string[] = [], price = 0, purchasedPrice: number | undefined, categoryName = "";
   const rest: string[] = [];
   for (const l of lines) {
-    const m = l.match(/^(артикул|розміри?|ціна|закупка|закупівельна ціна|собівартість|категорія)\s*[:\-–]?\s*(.+)$/i);
+    const m = l.match(/^(артикул|розміри?|ціна закуп\S*|закупівельна ціна|закупка|закупівля|собівартість|ціна продаж\S*|ціна|категорія)\s*[:\-–]?\s*(.+)$/i);
     if (!m) { rest.push(l); continue; }
     const key = m[1].toLowerCase(), value = m[2].trim();
     if (key === "артикул") sku = value;
     else if (key.startsWith("розмір")) sizes = parseSizes(value.replace(/\s*(повномір\S*|маломір\S*|великомір\S*)\s*$/i, "").trim());
-    else if (key === "ціна") price = num(value.replace(/\s*(грн|₴)\.?$/i, ""));
+    else if (key.startsWith("ціна") && !key.includes("закуп")) price = num(value.replace(/\s*(грн|₴)\.?$/i, ""));
     else if (key === "категорія") categoryName = value;
     else purchasedPrice = num(value.replace(/\s*(грн|₴)\.?$/i, ""));
     // «Розміри 40-45 Повномірки»: примітку про посадку лишаємо в описі.
@@ -61,11 +64,13 @@ export async function parseNewProduct(text: string): Promise<{ product?: NewProd
     if (fit) rest.push(fit[1].charAt(0).toUpperCase() + fit[1].slice(1));
   }
   const [name, ...description] = rest;
+  const isFit = (l: string) => /^(повномір|маломір|великомір)/i.test(l);
   if (!name) return { error: "Напишіть назву товару першим рядком." };
   if (!sku) return { error: "Не бачу рядка «Артикул 135»." };
   if (!sizes.length) return { error: "Не розібрав розміри. Напишіть, наприклад, «Розміри 40-45» або «Розміри 36, 37, 38»." };
   if (!(price > 0)) return { error: "Не бачу ціни. Додайте рядок «Ціна 3200»." };
-  if (purchasedPrice !== undefined && !(purchasedPrice > 0)) return { error: "Не розібрав закупівельну ціну." };
+  if (!(purchasedPrice! > 0)) return { error: "Не бачу закупівельної ціни. Додайте рядок «Закупка 1600»." };
+  if (!description.filter((l) => !isFit(l)).length) return { error: "Додайте опис: рядки після ціни й розмірів." };
 
   let category: NewProduct["category"];
   if (categoryName) {
@@ -81,7 +86,7 @@ export async function parseNewProduct(text: string): Promise<{ product?: NewProd
     return { error: `Артикул «${sku}-${sizes[0]}» вже є в KeyCRM. Можливо, цей товар уже додано.` };
   }
 
-  return { product: { name, sku, sizes, price, purchasedPrice, category, description: description.join("\n") } };
+  return { product: { name, sku, sizes, price, purchasedPrice: purchasedPrice!, category, description: description.join("\n") } };
 }
 
 // Фото з Telegram: зберігаємо file_id кожного фото альбому окремим ключем, бо фото альбому
@@ -129,25 +134,33 @@ export async function createNewProduct(p: NewProduct, pictures: string[]) {
       purchased_price: p.purchasedPrice,
       currency_code: "UAH",
       category_id: p.category?.id,
+      ...BOX,
       pictures,
       custom_fields: [{ uuid: ON_SITE_FIELD, value: "1" }],
     }),
   });
 
+  // Фото спершу зберігаються в картці товару, тоді те саме перше фото ставимо кожному розміру.
+  const product = () =>
+    request<{ id: number; thumbnail_url?: string | null; attachments_data?: string[] | null; custom_fields?: { uuid?: string; value?: unknown }[] }>(
+      `/products/${created.id}?include=custom_fields`,
+      fresh,
+    );
+  const saved = await product();
+  const image = saved.attachments_data?.[0] || saved.thumbnail_url || pictures[0];
   const variant = (size: string) => ({
     sku: `${p.sku}-${size}`,
     price: p.price,
     purchased_price: p.purchasedPrice,
+    ...BOX,
+    image_url: image || undefined,
     properties: [{ name: "Розмір", value: size }],
   });
   await request(`/products/${created.id}/offers`, { method: "POST", ...fresh, body: JSON.stringify({ offers: p.sizes.map(variant) }) });
 
   // Перечитуємо, щоб показати Дрону, що справді збереглося.
-  const saved = await request<{ id: number; attachments_data?: string[] | null; custom_fields?: { uuid?: string; value?: unknown }[] }>(
-    `/products/${created.id}?include=custom_fields`,
-    fresh,
-  );
-  const offers = rows(await request<List<KOffer>>(`/offers?filter[product_id]=${created.id}&limit=50`, fresh));
+  type SavedOffer = KOffer & { image_url?: string | null; thumbnail_url?: string | null };
+  const offers = rows(await request<List<SavedOffer>>(`/offers?filter[product_id]=${created.id}&limit=50`, fresh));
   const onSite = saved.custom_fields?.find((f) => f.uuid === ON_SITE_FIELD)?.value;
   return {
     id: created.id,
@@ -155,6 +168,7 @@ export async function createNewProduct(p: NewProduct, pictures: string[]) {
     sizes: offers.filter((o) => o.properties?.length).map((o) => o.properties![0].value),
     // Варіант без розміру, якщо KeyCRM лишив базовий після додавання розмірів (через API його не прибрати).
     blank: offers.some((o) => !o.properties?.length),
+    sizePhotos: offers.filter((o) => o.properties?.length && (o.image_url || o.thumbnail_url)).length,
     onSite: onSite != null && onSite !== false && onSite !== 0 && onSite !== "0" && onSite !== "",
   };
 }

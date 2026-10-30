@@ -243,11 +243,12 @@ export async function handleProductPreview(text: string, messageId: number, grou
       `<b>${esc(product.name)}</b>`,
       `Артикул: ${esc(product.sku)}`,
       `Розміри: ${product.sizes.join(", ")} (артикули ${esc(product.sku)}-${product.sizes[0]} … ${esc(product.sku)}-${product.sizes.at(-1)})`,
-      `Ціна: ${formatPrice(product.price)}${product.purchasedPrice ? `, закупка ${formatPrice(product.purchasedPrice)}` : ""}`,
+      `Ціна: ${formatPrice(product.price)}, закупка ${formatPrice(product.purchasedPrice)}`,
+      "Коробка: 2000 г, 30×20×20 см",
       product.category ? `Категорія: ${esc(product.category.name)}` : "Категорія: без категорії",
-      `Фото: ${photos.length}${group ? "" : " (надішліть фото альбомом з цим текстом у підписі)"}`,
+      `Фото: ${photos.length}${group ? ", перше фото і в кожному розмірі" : " (надішліть фото альбомом з цим текстом у підписі)"}`,
       "Галочка «На сайт»: так",
-      product.description ? `\nОпис:\n${esc(product.description)}` : "Опис: порожній",
+      `\nОпис:\n${esc(product.description)}`,
     ].join("\n"),
     {
       reply_parameters: { message_id: messageId },
@@ -264,13 +265,14 @@ export async function handleProductCreate(originalText: string, group: string, o
   const warn = [
     r.sizes.length !== product.sizes.length ? `⚠️ Розмірів збереглося ${r.sizes.length} з ${product.sizes.length}.` : "",
     r.photos < pictures.length ? `⚠️ Фото збереглося ${r.photos} з ${pictures.length}.` : "",
+    pictures.length && r.sizePhotos < r.sizes.length ? `⚠️ Фото є в ${r.sizePhotos} розмірах з ${r.sizes.length}.` : "",
     r.blank ? "⚠️ У картці лишився варіант без розміру, видаліть його вручну." : "",
     r.onSite ? "" : "⚠️ Галочка «На сайт» не поставилась, поставте її в картці вручну.",
   ].filter(Boolean);
   await send(
     [
       `✅ Товар «${esc(product.name)}» створено в KeyCRM (ID ${r.id}).`,
-      `Розміри: ${r.sizes.join(", ") || "—"} · фото: ${r.photos} · на сайт: ${r.onSite ? "так" : "ні"}`,
+      `Розміри: ${r.sizes.join(", ") || "—"} · фото: ${r.photos} (у розмірах: ${r.sizePhotos}) · на сайт: ${r.onSite ? "так" : "ні"}`,
       ...warn,
       "",
       `На сайті зʼявиться протягом години, або одразу після «${REFRESH_BUTTON}».`,
