@@ -6,6 +6,7 @@ import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./tt
 import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
 import { createManualOrder, parseManualOrder } from "./manual-order";
+import { createNewProduct, groupPhotos, parseNewProduct, photoUrl } from "./new-product";
 import { formatPrice } from "./format";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
@@ -228,4 +229,50 @@ export async function handleRefresh() {
   revalidateTag("catalog", { expire: 0 });
   revalidatePath("/", "layout");
   await send("🔄 Сайт оновлено. Відкрийте сторінку товару ще раз: перше відкриття підтягне свіжі дані з KeyCRM.");
+}
+
+// Новий товар: фото альбомом з підписом (або просто текст). Спершу перевірка, створюємо після «Створити».
+// group — альбом, з якого беремо фото; на кнопці він записаний, а підпис беремо з повідомлення Дрона.
+export async function handleProductPreview(text: string, messageId: number, group: string | null) {
+  const { product, error } = await parseNewProduct(text);
+  if (!product) return send(`⚠️ Товар не створено. ${esc(error ?? "")}`, { reply_parameters: { message_id: messageId } });
+  const photos = group ? await groupPhotos(group) : [];
+  await send(
+    [
+      "👟 <b>Перевірте новий товар для KeyCRM:</b>",
+      `<b>${esc(product.name)}</b>`,
+      `Артикул: ${esc(product.sku)}`,
+      `Розміри: ${product.sizes.join(", ")} (артикули ${esc(product.sku)}-${product.sizes[0]} … ${esc(product.sku)}-${product.sizes.at(-1)})`,
+      `Ціна: ${formatPrice(product.price)}${product.purchasedPrice ? `, закупка ${formatPrice(product.purchasedPrice)}` : ""}`,
+      product.category ? `Категорія: ${esc(product.category.name)}` : "Категорія: без категорії",
+      `Фото: ${photos.length}${group ? "" : " (надішліть фото альбомом з цим текстом у підписі)"}`,
+      "Галочка «На сайт»: так",
+      product.description ? `\nОпис:\n${esc(product.description)}` : "Опис: порожній",
+    ].join("\n"),
+    {
+      reply_parameters: { message_id: messageId },
+      reply_markup: { inline_keyboard: [[{ text: "✅ Створити в KeyCRM", callback_data: `mkprod:${group ?? ""}` }, { text: "Ні", callback_data: "cancel" }]] },
+    },
+  );
+}
+
+export async function handleProductCreate(originalText: string, group: string, origin: string) {
+  const { product, error } = await parseNewProduct(originalText);
+  if (!product) return send(`⚠️ Товар не створено. ${esc(error ?? "")}`);
+  const pictures = group ? await Promise.all((await groupPhotos(group)).map((id) => photoUrl(origin, id))) : [];
+  const r = await createNewProduct(product, pictures);
+  const warn = [
+    r.sizes.length !== product.sizes.length ? `⚠️ Розмірів збереглося ${r.sizes.length} з ${product.sizes.length}.` : "",
+    r.photos < pictures.length ? `⚠️ Фото збереглося ${r.photos} з ${pictures.length}.` : "",
+    r.onSite ? "" : "⚠️ Галочка «На сайт» не поставилась, поставте її в картці вручну.",
+  ].filter(Boolean);
+  await send(
+    [
+      `✅ Товар «${esc(product.name)}» створено в KeyCRM (ID ${r.id}).`,
+      `Розміри: ${r.sizes.join(", ") || "—"} · фото: ${r.photos} · на сайт: ${r.onSite ? "так" : "ні"}`,
+      ...warn,
+      "",
+      `На сайті зʼявиться протягом години, або одразу після «${REFRESH_BUTTON}».`,
+    ].join("\n"),
+  );
 }

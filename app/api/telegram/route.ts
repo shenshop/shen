@@ -3,16 +3,25 @@ import { telegram } from "@/lib/telegram";
 import { markRefusalDone } from "@/lib/refusals";
 import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
-import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManualPreview, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { looksLikeProduct, rememberPhoto } from "@/lib/new-product";
+import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
 type Update = {
-  message?: { message_id: number; chat: { id: number }; text?: string; reply_to_message?: { text?: string } };
+  message?: {
+    message_id: number;
+    chat: { id: number };
+    text?: string;
+    caption?: string;
+    media_group_id?: string;
+    photo?: { file_id: string; width: number }[];
+    reply_to_message?: { text?: string };
+  };
   callback_query?: {
     id: string;
     data?: string;
-    message?: { chat: { id: number }; message_id: number; reply_to_message?: { text?: string } };
+    message?: { chat: { id: number }; message_id: number; reply_to_message?: { text?: string; caption?: string } };
   };
 };
 
@@ -61,8 +70,25 @@ export async function POST(req: Request) {
         if (original) await handleManualCreate(original);
         else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного повідомлення. Надішліть дані замовлення ще раз." });
       }
+      const mkprod = cb.data?.match(/^mkprod:(.*)$/);
+      if (mkprod) {
+        const original = cb.message?.reply_to_message?.caption ?? cb.message?.reply_to_message?.text;
+        if (original) await handleProductCreate(original, mkprod[1], new URL(req.url).origin);
+        else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного повідомлення. Надішліть товар ще раз." });
+      }
       if (cb.data === "move") await handleMove();
       else if (cb.data === "cancel") await telegram("sendMessage", { text: "Добре, нічого не змінюю." });
+    } else if (update.message?.photo?.length) {
+      // Фото нового товару. Альбом приходить окремими повідомленнями, підпис лише в одному з них.
+      const msg = update.message;
+      const group = msg.media_group_id ?? `m${msg.message_id}`;
+      const biggest = [...msg.photo!].sort((a, b) => b.width - a.width)[0];
+      await rememberPhoto(group, msg.message_id, biggest.file_id);
+      if (msg.caption && looksLikeProduct(msg.caption)) {
+        // Чекаємо, поки дійдуть решта фото альбому, щоб у перевірці була правильна кількість.
+        await new Promise((r) => setTimeout(r, 4000));
+        await handleProductPreview(msg.caption, msg.message_id, group);
+      }
     } else {
       const text = update.message?.text?.trim() ?? "";
       const reasonFor = update.message?.reply_to_message?.text?.match(REASON_PROMPT);
@@ -73,6 +99,7 @@ export async function POST(req: Request) {
       if (text === CHECK_BUTTON || text.startsWith("/sklad") || text.startsWith("/start")) await handleCheck();
       else if (text === TTN_BUTTON || text.startsWith("/ttn")) await handleTtnList(new URL(req.url).origin);
       else if (text === REFUSALS_BUTTON || text.startsWith("/vidmovy")) await handleRefusals(new URL(req.url).origin);
+      else if (looksLikeProduct(text)) await handleProductPreview(text, update.message!.message_id, null);
       else if (looksLikeOrder(text)) await handleManualPreview(text, update.message!.message_id);
       else if (text === PICKUP_BUTTON || text.startsWith("/nezabraly")) await handlePickups(new URL(req.url).origin);
       else if (text === REFRESH_BUTTON || text.startsWith("/refresh")) await handleRefresh();
