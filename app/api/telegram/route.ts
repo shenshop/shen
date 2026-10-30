@@ -21,7 +21,7 @@ type Update = {
   callback_query?: {
     id: string;
     data?: string;
-    message?: { chat: { id: number }; message_id: number; reply_to_message?: { text?: string; caption?: string } };
+    message?: { chat: { id: number }; message_id: number; reply_to_message?: { message_id?: number; text?: string; caption?: string } };
   };
 };
 
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
       const mkprod = cb.data?.match(/^mkprod:(.*)$/);
       if (mkprod) {
         const original = cb.message?.reply_to_message?.caption ?? cb.message?.reply_to_message?.text;
-        if (original) await handleProductCreate(original, mkprod[1], new URL(req.url).origin);
+        if (original) await handleProductCreate(original, mkprod[1], new URL(req.url).origin, cb.message?.reply_to_message?.message_id);
         else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного повідомлення. Надішліть товар ще раз." });
       }
       if (cb.data === "move") await handleMove();

@@ -148,14 +148,41 @@ type KV = {
 const kv = () => (getCloudflareContext().env as unknown as { NEXT_INC_CACHE_KV: KV }).NEXT_INC_CACHE_KV;
 const photoKey = (group: string, messageId: number) => `tg-newproduct:${group}:${String(messageId).padStart(12, "0")}`;
 
+// Список ключів KV оновлюється із запізненням до хвилини, тож щойно надіслані фото альбому
+// в ньому ще не видно. Тому кожне фото кладемо ще й у кеш Cloudflare: там його видно одразу,
+// і шукаємо за номерами повідомлень поруч з підписом (фото альбому йдуть підряд).
+const cache = () => (caches as unknown as { default: Cache }).default;
+const cacheKey = (group: string, messageId: number) => `https://khoda.com.ua/__tg-newproduct/${encodeURIComponent(group)}/${messageId}`;
+
 export async function rememberPhoto(group: string, messageId: number, fileId: string) {
-  await kv().put(photoKey(group, messageId), fileId, { expirationTtl: 60 * 60 * 24 * 3 });
+  await Promise.all([
+    kv().put(photoKey(group, messageId), fileId, { expirationTtl: 60 * 60 * 24 * 3 }),
+    cache().put(cacheKey(group, messageId), new Response(fileId, { headers: { "Cache-Control": "max-age=259200" } })),
+  ]);
 }
 
-export async function groupPhotos(group: string): Promise<string[]> {
+/** Фото альбому за порядком. around — номер повідомлення з підписом. */
+export async function groupPhotos(group: string, around?: number): Promise<string[]> {
+  const found = new Map<number, string>();
+  if (around) {
+    const ids = Array.from({ length: 21 }, (_, i) => around - 10 + i);
+    await Promise.all(
+      ids.map(async (id) => {
+        const hit = await cache().match(cacheKey(group, id));
+        if (hit) found.set(id, await hit.text());
+      }),
+    );
+  }
   const { keys } = await kv().list({ prefix: `tg-newproduct:${group}:` });
-  const ids = await Promise.all(keys.sort((a, b) => a.name.localeCompare(b.name)).map((k) => kv().get(k.name)));
-  return ids.filter((x): x is string => Boolean(x)).slice(0, 10);
+  await Promise.all(
+    keys.map(async (k) => {
+      const id = Number(k.name.split(":").pop());
+      if (found.has(id)) return;
+      const fileId = await kv().get(k.name);
+      if (fileId) found.set(id, fileId);
+    }),
+  );
+  return [...found].sort((a, b) => a[0] - b[0]).map(([, f]) => f).slice(0, 10);
 }
 
 // Підпис для посилання на фото, щоб наш сайт не віддавав будь-які файли бота за чужим запитом.
@@ -233,7 +260,7 @@ export async function createNewProduct(p: NewProduct, pictures: string[]) {
     reused: Boolean(p.existingId),
     checked: saved != null,
     photos: saved?.attachments_data?.length ?? 0,
-    sizes: offers.filter((o) => o.properties?.length).map((o) => o.properties![0].value),
+    sizes: offers.filter((o) => o.properties?.length).map((o) => o.properties![0].value).sort((a, b) => parseFloat(a) - parseFloat(b)),
     // Варіант без розміру, якщо KeyCRM лишив базовий після додавання розмірів (через API його не прибрати).
     blank: offers.some((o) => !o.properties?.length),
     sizePhotos: offers.filter((o) => o.properties?.length && (o.image_url || o.thumbnail_url)).length,

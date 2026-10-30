@@ -236,7 +236,7 @@ export async function handleRefresh() {
 export async function handleProductPreview(text: string, messageId: number, group: string | null) {
   const { product, error } = await parseNewProduct(text);
   if (!product) return send(`⚠️ Товар не створено. ${esc(error ?? "")}`, { reply_parameters: { message_id: messageId } });
-  const photos = group ? await groupPhotos(group) : [];
+  const photos = group ? await groupPhotos(group, messageId) : [];
   await send(
     [
       product.existingId
@@ -261,10 +261,10 @@ export async function handleProductPreview(text: string, messageId: number, grou
   );
 }
 
-export async function handleProductCreate(originalText: string, group: string, origin: string) {
+export async function handleProductCreate(originalText: string, group: string, origin: string, captionId?: number) {
   const { product, error } = await parseNewProduct(originalText);
   if (!product) return send(`⚠️ Товар не створено. ${esc(error ?? "")}`);
-  const pictures = group ? await Promise.all((await groupPhotos(group)).map((id) => photoUrl(origin, id))) : [];
+  const pictures = group ? await Promise.all((await groupPhotos(group, captionId)).map((id) => photoUrl(origin, id))) : [];
   const r = await createNewProduct(product, pictures);
   if (!r.checked) {
     return send(
