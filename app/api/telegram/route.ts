@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { telegram } from "@/lib/telegram";
-import { CHECK_BUTTON, handleCheck, handleMove, handleRefresh, handleSent, handleTtnList, REFRESH_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { markRefusalDone } from "@/lib/refusals";
+import { CHECK_BUTTON, handleCheck, handleMove, handleRefresh, handleRefusals, handleSent, handleTtnList, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +29,17 @@ export async function POST(req: Request) {
       const sent = cb.data?.match(/^sent:(\d+)$/);
       // Спочатку ставимо тег у KeyCRM, щоб позначка в чаті не зʼявилась, якщо тег не поставився.
       if (sent) await handleSent(Number(sent[1]));
+      const refused = cb.data?.match(/^refused:(\d+)$/);
+      if (refused) await markRefusalDone(Number(refused[1]));
       // Прибираємо кнопки, щоб не натиснути двічі; після «Надіслано» лишаємо позначку.
       if (cb.message) {
         await telegram("editMessageReplyMarkup", {
           message_id: cb.message.message_id,
-          reply_markup: { inline_keyboard: sent ? [[{ text: "✅ Надіслано клієнту", callback_data: "noop" }]] : [] },
+          reply_markup: { inline_keyboard: sent
+            ? [[{ text: "✅ Надіслано клієнту", callback_data: "noop" }]]
+            : refused
+              ? [[{ text: "✅ Написали клієнту", callback_data: "noop" }]]
+              : [] },
         });
       }
       if (cb.data === "move") await handleMove();
@@ -41,6 +48,7 @@ export async function POST(req: Request) {
       const text = update.message?.text?.trim() ?? "";
       if (text === CHECK_BUTTON || text.startsWith("/sklad") || text.startsWith("/start")) await handleCheck();
       else if (text === TTN_BUTTON || text.startsWith("/ttn")) await handleTtnList(new URL(req.url).origin);
+      else if (text === REFUSALS_BUTTON || text.startsWith("/vidmovy")) await handleRefusals(new URL(req.url).origin);
       else if (text === REFRESH_BUTTON || text.startsWith("/refresh")) await handleRefresh();
     }
   } catch (e) {

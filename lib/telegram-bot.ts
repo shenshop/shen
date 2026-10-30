@@ -3,12 +3,14 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveOrders, type PlannedOrder } from "./stock-check";
 import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./ttn-notify";
+import { markRefusalDone, refusals, refusalText } from "./refusals";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
 export const TTN_BUTTON = "📮 ТТН клієнтам";
 export const REFRESH_BUTTON = "🔄 Оновити сайт";
+export const REFUSALS_BUTTON = "↩️ Відмови";
 export const KEYBOARD = {
-  keyboard: [[{ text: CHECK_BUTTON }, { text: TTN_BUTTON }], [{ text: REFRESH_BUTTON }]],
+  keyboard: [[{ text: CHECK_BUTTON }, { text: TTN_BUTTON }], [{ text: REFUSALS_BUTTON }, { text: REFRESH_BUTTON }]],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -119,6 +121,26 @@ export async function handleTtnList(origin: string) {
         ]],
       },
     });
+  }
+}
+
+// Відмови від отримання за останні 2 дні: текст для клієнта, Viber і «Написав» (тег у KeyCRM).
+export async function handleRefusals(origin: string) {
+  const { list, statuses } = await refusals();
+  if (!list.length) return send(`↩️ Нових відмов немає (статуси: ${esc(statuses.join(", "))}).`);
+  await send(`↩️ <b>Відмови від отримання: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
+  for (const r of list) {
+    await send(
+      `<b>№${r.id}</b>${r.buyer ? ` · ${esc(r.buyer)}` : ""}\n📞 <code>${esc(r.phone)}</code>${r.items ? `\n👟 ${esc(r.items)}` : ""}\n\n<code>${esc(refusalText)}</code>`,
+      {
+        reply_markup: {
+          inline_keyboard: [[
+            { text: "💬 Відкрити Viber", url: `${origin}/viber/${viberDigits(r.phone)}` },
+            { text: "✅ Написав", callback_data: `refused:${r.id}` },
+          ]],
+        },
+      },
+    );
   }
 }
 
