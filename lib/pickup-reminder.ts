@@ -2,10 +2,10 @@ import "server-only";
 import { request } from "./keycrm";
 
 // Посилки Нової Пошти, які лежать у відділенні вже 3-й день, а клієнт їх не забрав.
-// Беремо замовлення «Передано в доставку» з ТТН, статус і дату прибуття питаємо в Нової Пошти.
+// Беремо замовлення в статусі «Прибуло до відділення» з ТТН, дату прибуття питаємо в Нової Пошти.
 // «Написав» позначаємо тегом у KeyCRM, щоб бот не нагадував про ту саму посилку.
 
-const SHIPPED_STATUS_ID = 8;
+const ARRIVED_STATUS = /прибул|прибув/i;
 const DONE_TAG = "нагадали забрати";
 const DAYS_WAITING = 2; // день прибуття — 1-й, отже на 3-й день минуло 2 дні
 const ARRIVED = new Set(["7", "8"]); // 7 — прибув у відділення, 8 — у поштомат
@@ -58,11 +58,14 @@ async function npStatuses(ttns: string[]): Promise<NpStatus[]> {
 }
 
 export async function pickupsWaiting(): Promise<Pickup[]> {
+  const statuses = rows(await request<List<Named>>("/order/status?limit=50", fresh));
+  const arrivedIds = statuses.filter((s) => ARRIVED_STATUS.test(s.name)).map((s) => s.id);
+  if (!arrivedIds.length) throw new Error(`Не знайшов статус «Прибуло до відділення». Статуси в KeyCRM: ${statuses.map((s) => s.name).join(", ")}`);
   const tagId = await doneTagId();
   const orders: KOrder[] = [];
   for (let page = 1; page <= 4; page++) {
     const res = await request<{ data: KOrder[]; next_page_url?: string | null }>(
-      `/order?filter[status_id]=${SHIPPED_STATUS_ID}&include=buyer,shipping,tags&sort=-id&limit=50&page=${page}`,
+      `/order?filter[status_id]=${arrivedIds.join(",")}&include=buyer,shipping,tags&sort=-id&limit=50&page=${page}`,
       fresh,
     );
     orders.push(...res.data);

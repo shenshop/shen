@@ -9,6 +9,9 @@ export async function POST(req: Request) {
   if (req.headers.get("x-telegram-bot-api-secret-token") !== (await webhookSecret())) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
+  // Cron спрацьовує о 07:00 і 08:00 UTC; працюємо лише тоді, коли в Києві 10:00 (і взимку, і влітку).
+  const kyivHour = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", hour12: false }));
+  if (kyivHour !== 10) return NextResponse.json({ ok: true, skipped: kyivHour });
   try {
     await handlePickups(new URL(req.url).origin, true);
   } catch (e) {
