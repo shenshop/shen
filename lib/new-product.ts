@@ -50,9 +50,20 @@ export async function parseNewProduct(text: string): Promise<{ product?: NewProd
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   let sku = "", sizes: string[] = [], price = 0, purchasedPrice: number | undefined, categoryName = "";
   const rest: string[] = [];
+  const table: string[] = [];
   for (const l of lines) {
-    const m = l.match(/^(артикул|розміри?|ціна закуп\S*|закупівельна ціна|закупка|закупівля|собівартість|ціна продаж\S*|ціна|категорія)\s*[:\-–]?\s*(.+)$/i);
-    if (!m) { rest.push(l); continue; }
+    // Емодзі на початку рядка («💰 Ціна 3200») не заважають. Ключ має бути цілим словом:
+    // «Розмірна сітка» — це таблиця для опису, а не список розмірів.
+    const m = l
+      .replace(/^[^\p{L}\d]+/u, "")
+      .match(/^(артикул|розміри?|ціна закуп\S*|закупівельна ціна|закупка|закупівля|собівартість|ціна продаж\S*|ціна|категорія)(?=[\s:\-–]|$)\s*[:\-–]?\s*(.+)$/i);
+    if (!m) {
+      rest.push(l);
+      // Рядок розмірної сітки «36-23,5»: розмір і довжина устілки (вона менша за розмір).
+      const row = l.match(/^(\d{2}(?:[.,]5)?)\s*[-–—]\s*(\d{2}(?:[.,]5)?)\s*(?:см)?$/i);
+      if (row && num(row[2]) < num(row[1])) table.push(row[1].replace(",", "."));
+      continue;
+    }
     const key = m[1].toLowerCase(), value = m[2].trim();
     if (key === "артикул") sku = value;
     else if (key.startsWith("розмір")) sizes = parseSizes(value.replace(/\s*(повномір\S*|маломір\S*|великомір\S*)\s*$/i, "").trim());
@@ -63,6 +74,8 @@ export async function parseNewProduct(text: string): Promise<{ product?: NewProd
     const fit = key.startsWith("розмір") ? value.match(/(повномір\S*|маломір\S*|великомір\S*)/i) : null;
     if (fit) rest.push(fit[1].charAt(0).toUpperCase() + fit[1].slice(1));
   }
+  // Без рядка «Розміри …» беремо розміри з розмірної сітки.
+  if (!sizes.length) sizes = table;
   const [name, ...description] = rest;
   const isFit = (l: string) => /^(повномір|маломір|великомір)/i.test(l);
   if (!name) return { error: "Напишіть назву товару першим рядком." };
