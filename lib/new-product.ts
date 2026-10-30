@@ -16,7 +16,7 @@ import { request } from "./keycrm";
 const fresh = { cache: "no-store" as const };
 type List<T> = T[] | { data: T[] };
 const rows = <T>(r: List<T>) => (Array.isArray(r) ? r : r.data);
-const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 const ON_SITE_FIELD = "CT_1006";
 // Одиниці з налаштувань KeyCRM: грами і сантиметри.
 const BOX = { weight: 2000, length: 30, width: 20, height: 20 };

@@ -15,7 +15,7 @@ const SOURCE = "дзвінок";
 const fresh = { cache: "no-store" as const };
 type List<T> = T[] | { data: T[] };
 const rows = <T>(r: List<T>) => (Array.isArray(r) ? r : r.data);
-const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
 type KOffer = { id: number; sku: string; price: number; product?: { name?: string } | null; properties?: { name: string; value: string }[] | null };
 
