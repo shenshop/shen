@@ -2,13 +2,18 @@ import { NextResponse } from "next/server";
 import { telegram } from "@/lib/telegram";
 import { markRefusalDone } from "@/lib/refusals";
 import { markReminded } from "@/lib/pickup-reminder";
-import { CHECK_BUTTON, handleCheck, handleMove, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { looksLikeOrder } from "@/lib/manual-order";
+import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManualPreview, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
 type Update = {
-  message?: { chat: { id: number }; text?: string; reply_to_message?: { text?: string } };
-  callback_query?: { id: string; data?: string; message?: { chat: { id: number }; message_id: number } };
+  message?: { message_id: number; chat: { id: number }; text?: string; reply_to_message?: { text?: string } };
+  callback_query?: {
+    id: string;
+    data?: string;
+    message?: { chat: { id: number }; message_id: number; reply_to_message?: { text?: string } };
+  };
 };
 
 // Вебхук Telegram-бота: кнопка «Перевірити склад» і підтвердження переведення замовлень.
@@ -51,6 +56,11 @@ export async function POST(req: Request) {
               : [] },
         });
       }
+      if (cb.data === "mkorder") {
+        const original = cb.message?.reply_to_message?.text;
+        if (original) await handleManualCreate(original);
+        else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного повідомлення. Надішліть дані замовлення ще раз." });
+      }
       if (cb.data === "move") await handleMove();
       else if (cb.data === "cancel") await telegram("sendMessage", { text: "Добре, нічого не змінюю." });
     } else {
@@ -63,6 +73,7 @@ export async function POST(req: Request) {
       if (text === CHECK_BUTTON || text.startsWith("/sklad") || text.startsWith("/start")) await handleCheck();
       else if (text === TTN_BUTTON || text.startsWith("/ttn")) await handleTtnList(new URL(req.url).origin);
       else if (text === REFUSALS_BUTTON || text.startsWith("/vidmovy")) await handleRefusals(new URL(req.url).origin);
+      else if (looksLikeOrder(text)) await handleManualPreview(text, update.message!.message_id);
       else if (text === PICKUP_BUTTON || text.startsWith("/nezabraly")) await handlePickups(new URL(req.url).origin);
       else if (text === REFRESH_BUTTON || text.startsWith("/refresh")) await handleRefresh();
     }

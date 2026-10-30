@@ -5,6 +5,8 @@ import { buildPlan, MAX_MOVES, moveOrders, type PlannedOrder } from "./stock-che
 import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./ttn-notify";
 import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
+import { createManualOrder, parseManualOrder } from "./manual-order";
+import { formatPrice } from "./format";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
 export const TTN_BUTTON = "📮 ТТН клієнтам";
@@ -185,6 +187,35 @@ export async function handleReasonButton(orderId: number, code: string) {
 export async function handleReasonText(orderId: number, reason: string) {
   await saveRefusalReason(orderId, reason);
   await send(`📝 №${orderId}: записав у KeyCRM «Причина відмови: ${esc(reason.trim())}».`);
+}
+
+// Замовлення з повідомлення: спершу перевірка з кнопками, а створюємо лише після «Так».
+// Перевірка йде відповіддю на повідомлення Дрона, тож на «Так» беремо текст звідти і розбираємо ще раз.
+export async function handleManualPreview(text: string, messageId: number) {
+  const { order, error } = await parseManualOrder(text);
+  if (!order) return send(`⚠️ Замовлення не створено. ${esc(error ?? "")}`, { reply_parameters: { message_id: messageId } });
+  const total = order.items.reduce((s, i) => s + i.price, 0);
+  await send(
+    [
+      "🧾 <b>Перевірте замовлення (джерело «Дзвінок»):</b>",
+      `👤 ${esc(order.name)}`,
+      `📞 ${esc(order.phone)}`,
+      `🚚 Нова Пошта: ${esc(order.city)}, ${esc(order.warehouse.name)}`,
+      ...order.items.map((i) => `• ${esc(i.name)}, розмір ${esc(i.size)} (${esc(i.sku)}) = ${formatPrice(i.price)}`),
+      `<b>Разом: ${formatPrice(total)}</b>, накладений платіж`,
+    ].join("\n"),
+    {
+      reply_parameters: { message_id: messageId },
+      reply_markup: { inline_keyboard: [[{ text: "✅ Створити в KeyCRM", callback_data: "mkorder" }, { text: "Ні", callback_data: "cancel" }]] },
+    },
+  );
+}
+
+export async function handleManualCreate(originalText: string) {
+  const { order, error } = await parseManualOrder(originalText);
+  if (!order) return send(`⚠️ Замовлення не створено. ${esc(error ?? "")}`);
+  const created = await createManualOrder(order);
+  await send(`✅ Замовлення №${created.id} створено в KeyCRM: ${esc(order.name)}, ${order.items.length} ${order.items.length === 1 ? "пара" : order.items.length < 5 ? "пари" : "пар"}.`);
 }
 
 export async function handleSent(orderId: number) {
