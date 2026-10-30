@@ -239,14 +239,18 @@ export async function handleProductPreview(text: string, messageId: number, grou
   const photos = group ? await groupPhotos(group) : [];
   await send(
     [
-      "👟 <b>Перевірте новий товар для KeyCRM:</b>",
+      product.existingId
+        ? `👟 <b>Товар з артикулом ${esc(product.sku)} уже є в KeyCRM без розмірів (ID ${product.existingId}). Додам у нього розміри:</b>`
+        : "👟 <b>Перевірте новий товар для KeyCRM:</b>",
       `<b>${esc(product.name)}</b>`,
       `Артикул: ${esc(product.sku)}`,
       `Розміри: ${product.sizes.join(", ")} (артикули ${esc(product.sku)}-${product.sizes[0]} … ${esc(product.sku)}-${product.sizes.at(-1)})`,
       `Ціна: ${formatPrice(product.price)}, закупка ${formatPrice(product.purchasedPrice)}`,
       "Коробка: 2000 г, 30×20×20 см",
       product.category ? `Категорія: ${esc(product.category.name)}` : "Категорія: без категорії",
-      `Фото: ${photos.length}${group ? ", перше фото і в кожному розмірі" : " (надішліть фото альбомом з цим текстом у підписі)"}`,
+      group
+        ? `Фото: ${photos.length}${photos.length < 2 ? " (решта фото альбому підтягнеться при створенні)" : ""}, перше фото і в кожному розмірі`
+        : "Фото: немає (надішліть фото альбомом з цим текстом у підписі)",
       "Галочка «На сайт»: так",
       `\nОпис:\n${esc(product.description)}`,
     ].join("\n"),
@@ -262,16 +266,21 @@ export async function handleProductCreate(originalText: string, group: string, o
   if (!product) return send(`⚠️ Товар не створено. ${esc(error ?? "")}`);
   const pictures = group ? await Promise.all((await groupPhotos(group)).map((id) => photoUrl(origin, id))) : [];
   const r = await createNewProduct(product, pictures);
+  if (!r.checked) {
+    return send(
+      `✅ Товар «${esc(product.name)}» ${r.reused ? "доповнено розмірами" : "створено"} в KeyCRM (ID ${r.id}), але KeyCRM ще не віддає його для перевірки. Гляньте картку: розміри, фото, «На сайт».`,
+    );
+  }
   const warn = [
     r.sizes.length !== product.sizes.length ? `⚠️ Розмірів збереглося ${r.sizes.length} з ${product.sizes.length}.` : "",
-    r.photos < pictures.length ? `⚠️ Фото збереглося ${r.photos} з ${pictures.length}.` : "",
+    !r.reused && r.photos < pictures.length ? `⚠️ Фото збереглося ${r.photos} з ${pictures.length}.` : "",
     pictures.length && r.sizePhotos < r.sizes.length ? `⚠️ Фото є в ${r.sizePhotos} розмірах з ${r.sizes.length}.` : "",
     r.blank ? "⚠️ У картці лишився варіант без розміру, видаліть його вручну." : "",
     r.onSite ? "" : "⚠️ Галочка «На сайт» не поставилась, поставте її в картці вручну.",
   ].filter(Boolean);
   await send(
     [
-      `✅ Товар «${esc(product.name)}» створено в KeyCRM (ID ${r.id}).`,
+      `✅ Товар «${esc(product.name)}» ${r.reused ? "доповнено розмірами" : "створено"} в KeyCRM (ID ${r.id}).`,
       `Розміри: ${r.sizes.join(", ") || "—"} · фото: ${r.photos} (у розмірах: ${r.sizePhotos}) · на сайт: ${r.onSite ? "так" : "ні"}`,
       ...warn,
       "",

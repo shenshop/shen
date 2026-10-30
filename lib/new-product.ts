@@ -29,6 +29,8 @@ export type NewProduct = {
   purchasedPrice: number;
   category?: { id: number; name: string };
   description: string;
+  // Товар з цим артикулом уже є, але без розмірів (попередня спроба обірвалась): лише додаємо розміри.
+  existingId?: number;
 };
 
 /** Схоже на новий товар: є рядки «Артикул …» і «Розміри …». */
@@ -128,7 +130,12 @@ export async function parseNewProduct(text: string): Promise<{ product?: NewProd
     return { error: `Артикул «${sku}-${sizes[0]}» вже є в KeyCRM. Можливо, цей товар уже додано.` };
   }
 
-  return { product: { name, sku, sizes, price, purchasedPrice: purchasedPrice!, category, description: description.join("\n") } };
+  const base = rows(await request<List<{ sku: string; product_id: number; properties?: unknown[] | null }>>(`/offers?filter[sku]=${encodeURIComponent(sku)}&limit=5`, fresh))
+    .find((o) => norm(o.sku) === norm(sku) && !o.properties?.length);
+
+  return {
+    product: { name, sku, sizes, price, purchasedPrice: purchasedPrice!, category, description: description.join("\n"), existingId: base?.product_id },
+  };
 }
 
 // Фото з Telegram: зберігаємо file_id кожного фото альбому окремим ключем, бо фото альбому
@@ -164,49 +171,68 @@ export async function photoUrl(origin: string, fileId: string) {
 
 type KOffer = { id: number; sku: string; properties?: { name: string; value: string }[] | null };
 
-export async function createNewProduct(p: NewProduct, pictures: string[]) {
-  const created = await request<{ id: number }>("/products", {
-    method: "POST",
-    ...fresh,
-    body: JSON.stringify({
-      name: p.name,
-      description: p.description.split("\n").map((l) => `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`).join(""),
-      sku: p.sku,
-      price: p.price,
-      purchased_price: p.purchasedPrice,
-      currency_code: "UAH",
-      category_id: p.category?.id,
-      ...BOX,
-      pictures,
-      custom_fields: [{ uuid: ON_SITE_FIELD, value: "1" }],
-    }),
-  });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  // Фото спершу зберігаються в картці товару, тоді те саме перше фото ставимо кожному розміру.
-  const product = () =>
-    request<{ id: number; thumbnail_url?: string | null; attachments_data?: string[] | null; custom_fields?: { uuid?: string; value?: unknown }[] }>(
-      `/products/${created.id}?include=custom_fields`,
-      fresh,
-    );
-  const saved = await product();
-  const image = saved.attachments_data?.[0] || saved.thumbnail_url || pictures[0];
+// Щойно створений товар KeyCRM віддає не одразу (404 кілька секунд), тому читаємо з повторами.
+async function readBack<T>(path: string): Promise<T | null> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    await sleep(3000);
+    try {
+      return await request<T>(path, fresh);
+    } catch (e) {
+      if (!String(e).includes("→ 404")) throw e;
+    }
+  }
+  return null;
+}
+
+export async function createNewProduct(p: NewProduct, pictures: string[]) {
+  const id =
+    p.existingId ??
+    (
+      await request<{ id: number }>("/products", {
+        method: "POST",
+        ...fresh,
+        body: JSON.stringify({
+          name: p.name,
+          description: p.description,
+          sku: p.sku,
+          price: p.price,
+          purchased_price: p.purchasedPrice,
+          currency_code: "UAH",
+          category_id: p.category?.id,
+          ...BOX,
+          pictures,
+          custom_fields: [{ uuid: ON_SITE_FIELD, value: "1" }],
+        }),
+      })
+    ).id;
+
+  // Перша спроба записала опис HTML-тегами, у картці KeyCRM він злипся в один рядок.
+  if (p.existingId) await request(`/products/${id}`, { method: "PUT", ...fresh, body: JSON.stringify({ description: p.description }) });
+
   const variant = (size: string) => ({
     sku: `${p.sku}-${size}`,
     price: p.price,
     purchased_price: p.purchasedPrice,
     ...BOX,
-    image_url: image || undefined,
+    image_url: pictures[0],
     properties: [{ name: "Розмір", value: size }],
   });
-  await request(`/products/${created.id}/offers`, { method: "POST", ...fresh, body: JSON.stringify({ offers: p.sizes.map(variant) }) });
+  await request(`/products/${id}/offers`, { method: "POST", ...fresh, body: JSON.stringify({ offers: p.sizes.map(variant) }) });
 
   // Перечитуємо, щоб показати Дрону, що справді збереглося.
   type SavedOffer = KOffer & { image_url?: string | null; thumbnail_url?: string | null };
-  const offers = rows(await request<List<SavedOffer>>(`/offers?filter[product_id]=${created.id}&limit=50`, fresh));
-  const onSite = saved.custom_fields?.find((f) => f.uuid === ON_SITE_FIELD)?.value;
+  const saved = await readBack<{ attachments_data?: string[] | null; custom_fields?: { uuid?: string; value?: unknown }[] }>(
+    `/products/${id}?include=custom_fields`,
+  );
+  const offers = rows((await readBack<List<SavedOffer>>(`/offers?filter[product_id]=${id}&limit=50`)) ?? []);
+  const onSite = saved?.custom_fields?.find((f) => f.uuid === ON_SITE_FIELD)?.value;
   return {
-    id: created.id,
-    photos: saved.attachments_data?.length ?? 0,
+    id,
+    reused: Boolean(p.existingId),
+    checked: saved != null,
+    photos: saved?.attachments_data?.length ?? 0,
     sizes: offers.filter((o) => o.properties?.length).map((o) => o.properties![0].value),
     // Варіант без розміру, якщо KeyCRM лишив базовий після додавання розмірів (через API його не прибрати).
     blank: offers.some((o) => !o.properties?.length),
