@@ -6,7 +6,7 @@ import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./tt
 import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
 import { createManualOrder, parseManualOrder } from "./manual-order";
-import { createNewProduct, groupPhotos, parseNewProduct, photoUrl } from "./new-product";
+import { createNewProduct, findProduct, groupPhotos, MAX_PHOTOS, parseNewProduct, photoUpdateSku, photoUrl, replacePhotos } from "./new-product";
 import { formatPrice } from "./format";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
@@ -286,5 +286,45 @@ export async function handleProductCreate(originalText: string, group: string, o
       "",
       `На сайті зʼявиться протягом години, або одразу після «${REFRESH_BUTTON}».`,
     ].join("\n"),
+  );
+}
+
+// Заміна фото в наявному товарі: перевірка з кнопкою, міняємо після «Замінити».
+export async function handlePhotoPreview(caption: string, messageId: number, group: string) {
+  const sku = photoUpdateSku(caption);
+  if (!sku) return;
+  const { product, offers, error } = await findProduct(sku);
+  if (!product) return send(`⚠️ Фото не замінено. ${esc(error ?? "")}`, { reply_parameters: { message_id: messageId } });
+  const photos = await groupPhotos(group, messageId);
+  await send(
+    [
+      `🖼 <b>Замінити фото в товарі?</b>`,
+      `<b>${esc(product.name)}</b> (ID ${product.id})`,
+      `Зараз у картці фото: ${product.attachments_data?.length ?? 0}, розмірів: ${offers?.length ?? 0}`,
+      `Нові фото: ${photos.length}${photos.length < 2 ? " (решта фото альбому підтягнеться при заміні)" : ""}, максимум ${MAX_PHOTOS}`,
+      "Старі фото картки зміняться на нові, перше фото стане головним і стоятиме в усіх розмірах.",
+    ].join("\n"),
+    {
+      reply_parameters: { message_id: messageId },
+      reply_markup: { inline_keyboard: [[{ text: "✅ Замінити", callback_data: `mkphoto:${group}` }, { text: "Ні", callback_data: "cancel" }]] },
+    },
+  );
+}
+
+export async function handlePhotoReplace(caption: string, group: string, origin: string, captionId?: number) {
+  const sku = photoUpdateSku(caption);
+  const { product, error } = sku ? await findProduct(sku) : { product: undefined, error: "Не бачу артикула в підписі." };
+  if (!product) return send(`⚠️ Фото не замінено. ${esc(error ?? "")}`);
+  const pictures = await Promise.all((await groupPhotos(group, captionId)).map((id) => photoUrl(origin, id)));
+  if (!pictures.length) return send("⚠️ Не бачу фото альбому. Надішліть альбом з підписом ще раз.");
+  const r = await replacePhotos(product.id, pictures);
+  await send(
+    [
+      `✅ Фото в «${esc(product.name)}» замінено.`,
+      `У картці: ${r.photos ?? "?"} з ${pictures.length} · у розмірах: ${r.sizePhotos} з ${r.sizes}`,
+      r.photos != null && r.photos < pictures.length ? "⚠️ Не всі фото збереглися, гляньте картку." : "",
+      "",
+      `На сайті оновиться протягом години, або одразу після «${REFRESH_BUTTON}».`,
+    ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n"),
   );
 }

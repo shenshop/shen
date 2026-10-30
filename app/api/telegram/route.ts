@@ -3,8 +3,8 @@ import { telegram } from "@/lib/telegram";
 import { markRefusalDone } from "@/lib/refusals";
 import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
-import { looksLikeProduct, rememberPhoto } from "@/lib/new-product";
-import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { looksLikeProduct, photoUpdateSku, rememberPhoto } from "@/lib/new-product";
+import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +76,12 @@ export async function POST(req: Request) {
         if (original) await handleProductCreate(original, mkprod[1], new URL(req.url).origin, cb.message?.reply_to_message?.message_id);
         else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного повідомлення. Надішліть товар ще раз." });
       }
+      const mkphoto = cb.data?.match(/^mkphoto:(.+)$/);
+      if (mkphoto) {
+        const original = cb.message?.reply_to_message?.caption;
+        if (original) await handlePhotoReplace(original, mkphoto[1], new URL(req.url).origin, cb.message?.reply_to_message?.message_id);
+        else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного альбому. Надішліть його ще раз." });
+      }
       if (cb.data === "move") await handleMove();
       else if (cb.data === "cancel") await telegram("sendMessage", { text: "Добре, нічого не змінюю." });
     } else if (update.message?.photo?.length) {
@@ -88,6 +94,9 @@ export async function POST(req: Request) {
         // Чекаємо, поки дійдуть решта фото альбому, щоб у перевірці була правильна кількість.
         await new Promise((r) => setTimeout(r, 4000));
         await handleProductPreview(msg.caption, msg.message_id, group);
+      } else if (msg.caption && photoUpdateSku(msg.caption)) {
+        await new Promise((r) => setTimeout(r, 4000));
+        await handlePhotoPreview(msg.caption, msg.message_id, group);
       }
     } else {
       const text = update.message?.text?.trim() ?? "";

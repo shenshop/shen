@@ -20,6 +20,8 @@ const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 const ON_SITE_FIELD = "CT_1006";
 // Одиниці з налаштувань KeyCRM: грами і сантиметри.
 const BOX = { weight: 2000, length: 30, width: 20, height: 20 };
+// KeyCRM приймає в картку товару щонайбільше 6 фото, перше — головне.
+export const MAX_PHOTOS = 6;
 
 export type NewProduct = {
   name: string;
@@ -182,7 +184,7 @@ export async function groupPhotos(group: string, around?: number): Promise<strin
       if (fileId) found.set(id, fileId);
     }),
   );
-  return [...found].sort((a, b) => a[0] - b[0]).map(([, f]) => f).slice(0, 10);
+  return [...found].sort((a, b) => a[0] - b[0]).map(([, f]) => f).slice(0, MAX_PHOTOS);
 }
 
 // Підпис для посилання на фото, щоб наш сайт не віддавав будь-які файли бота за чужим запитом.
@@ -265,5 +267,53 @@ export async function createNewProduct(p: NewProduct, pictures: string[]) {
     blank: offers.some((o) => !o.properties?.length),
     sizePhotos: offers.filter((o) => o.properties?.length && (o.image_url || o.thumbnail_url)).length,
     onSite: onSite != null && onSite !== false && onSite !== 0 && onSite !== "0" && onSite !== "",
+  };
+}
+
+// Заміна фото в наявній картці: альбом з підписом «Фото 1193 чорні».
+export const photoUpdateSku = (caption: string) => caption.trim().match(/^фото\s*[:\-–]?\s*(.+)$/i)?.[1].split("\n")[0].trim() || null;
+
+type KProductRow = { id: number; name: string; sku?: string | null; attachments_data?: string[] | null };
+type KOfferRow = KOffer & { product_id: number; image_url?: string | null; thumbnail_url?: string | null };
+
+/** Товар за артикулом товару (1193 чорні) або артикулом розміру (1193 чорні-38). */
+export async function findProduct(sku: string): Promise<{ product?: KProductRow; offers?: KOfferRow[]; error?: string }> {
+  const all: KProductRow[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const res = await request<{ data: KProductRow[]; last_page?: number }>(`/products?limit=50&page=${page}&filter[is_archived]=false`, fresh);
+    all.push(...res.data);
+    if (!res.last_page || page >= res.last_page) break;
+  }
+  let product = all.find((p) => p.sku && norm(p.sku) === norm(sku));
+  if (!product) {
+    const offer = rows(await request<List<KOfferRow>>(`/offers?filter[sku]=${encodeURIComponent(sku)}&limit=5`, fresh)).find((o) => norm(o.sku) === norm(sku));
+    if (offer) product = all.find((p) => p.id === offer.product_id);
+  }
+  if (!product) {
+    // У старих товарів артикул є лише в розмірах («221 кор-42»): шукаємо розмір, що починається з «221 кор-».
+    for (let page = 1; page <= 10 && !product; page++) {
+      const res = await request<{ data: KOfferRow[]; last_page?: number }>(`/offers?limit=50&page=${page}&filter[is_archived]=false`, fresh);
+      const hit = res.data.find((o) => norm(o.sku).startsWith(`${norm(sku)}-`));
+      if (hit) product = all.find((p) => p.id === hit.product_id);
+      if (!res.last_page || page >= res.last_page) break;
+    }
+  }
+  if (!product) return { error: `У KeyCRM немає товару з артикулом «${sku}».` };
+  const offers = rows(await request<List<KOfferRow>>(`/offers?filter[product_id]=${product.id}&limit=50`, fresh));
+  return { product, offers };
+}
+
+export async function replacePhotos(productId: number, pictures: string[]) {
+  await request(`/products/${productId}`, { method: "PUT", ...fresh, body: JSON.stringify({ pictures }) });
+  const offers = rows(await request<List<KOfferRow>>(`/offers?filter[product_id]=${productId}&limit=50`, fresh));
+  if (offers.length) {
+    await request("/offers", { method: "PUT", ...fresh, body: JSON.stringify({ offers: offers.map((o) => ({ id: o.id, image_url: pictures[0] })) }) });
+  }
+  const saved = await readBack<{ attachments_data?: string[] | null }>(`/products/${productId}`);
+  const after = rows((await readBack<List<KOfferRow>>(`/offers?filter[product_id]=${productId}&limit=50`)) ?? []);
+  return {
+    photos: saved?.attachments_data?.length ?? null,
+    sizes: offers.length,
+    sizePhotos: after.filter((o) => o.image_url || o.thumbnail_url).length,
   };
 }
