@@ -73,3 +73,14 @@ export async function markRefusalDone(orderId: number) {
 }
 
 export const refusalText = "Доброго дня, бачу посилка повертається, не підійшов розмір?\nМалі чи великі?";
+
+export const REASONS: Record<string, string> = { small: "Малі", big: "Великі", dislike: "Не сподобались" };
+
+/** Дописує причину відмови в коментар менеджера в KeyCRM і ставить тег «Відмова уточнена». */
+export async function saveRefusalReason(orderId: number, reason: string) {
+  const order = await request<{ manager_comment?: string | null }>(`/order/${orderId}`, fresh);
+  const note = `Причина відмови: ${reason.trim().slice(0, 500)}`;
+  const manager_comment = [order.manager_comment?.trim(), note].filter(Boolean).join("\n");
+  await request(`/order/${orderId}`, { method: "PUT", body: JSON.stringify({ manager_comment }), ...fresh });
+  await markRefusalDone(orderId);
+}

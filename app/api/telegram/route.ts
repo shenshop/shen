@@ -2,12 +2,12 @@ import { NextResponse } from "next/server";
 import { telegram } from "@/lib/telegram";
 import { markRefusalDone } from "@/lib/refusals";
 import { markReminded } from "@/lib/pickup-reminder";
-import { CHECK_BUTTON, handleCheck, handleMove, handlePickups, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { CHECK_BUTTON, handleCheck, handleMove, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
 type Update = {
-  message?: { chat: { id: number }; text?: string };
+  message?: { chat: { id: number }; text?: string; reply_to_message?: { text?: string } };
   callback_query?: { id: string; data?: string; message?: { chat: { id: number }; message_id: number } };
 };
 
@@ -27,6 +27,12 @@ export async function POST(req: Request) {
     if (cb) {
       await telegram("answerCallbackQuery", { callback_query_id: cb.id });
       if (cb.data === "noop") return NextResponse.json({ ok: true });
+      // Кнопки причини відмови не прибираємо: повідомлення лишається, щоб можна було ще написати клієнту.
+      const why = cb.data?.match(/^why:(\d+):(\w+)$/);
+      if (why) {
+        await handleReasonButton(Number(why[1]), why[2]);
+        return NextResponse.json({ ok: true });
+      }
       const sent = cb.data?.match(/^sent:(\d+)$/);
       // Спочатку ставимо тег у KeyCRM, щоб позначка в чаті не зʼявилась, якщо тег не поставився.
       if (sent) await handleSent(Number(sent[1]));
@@ -49,6 +55,11 @@ export async function POST(req: Request) {
       else if (cb.data === "cancel") await telegram("sendMessage", { text: "Добре, нічого не змінюю." });
     } else {
       const text = update.message?.text?.trim() ?? "";
+      const reasonFor = update.message?.reply_to_message?.text?.match(REASON_PROMPT);
+      if (reasonFor && text) {
+        await handleReasonText(Number(reasonFor[1]), text);
+        return NextResponse.json({ ok: true });
+      }
       if (text === CHECK_BUTTON || text.startsWith("/sklad") || text.startsWith("/start")) await handleCheck();
       else if (text === TTN_BUTTON || text.startsWith("/ttn")) await handleTtnList(new URL(req.url).origin);
       else if (text === REFUSALS_BUTTON || text.startsWith("/vidmovy")) await handleRefusals(new URL(req.url).origin);

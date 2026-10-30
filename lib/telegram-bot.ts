@@ -3,7 +3,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveOrders, type PlannedOrder } from "./stock-check";
 import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./ttn-notify";
-import { refusals, refusalText } from "./refusals";
+import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
@@ -139,6 +139,9 @@ export async function handleRefusals(origin: string) {
           inline_keyboard: [[
             { text: "💬 Відкрити Viber", url: `${origin}/viber/${viberDigits(r.phone)}` },
             { text: "✅ Написав", callback_data: `refused:${r.id}` },
+          ], [
+            ...Object.entries(REASONS).map(([code, label]) => ({ text: label, callback_data: `why:${r.id}:${code}` })),
+            { text: "✍️ Своя", callback_data: `why:${r.id}:own` },
           ]],
         },
       },
@@ -164,6 +167,24 @@ export async function handlePickups(origin: string, quiet = false) {
       },
     );
   }
+}
+
+// Причина відмови: кнопка з готовою причиною або «Своя» — тоді бот просить написати текст у відповідь.
+export const REASON_PROMPT = /Причина відмови №(\d+)/;
+
+export async function handleReasonButton(orderId: number, code: string) {
+  if (code === "own") {
+    return send(`✍️ Причина відмови №${orderId}: напишіть у відповідь на це повідомлення.`, {
+      reply_markup: { force_reply: true, input_field_placeholder: "Наприклад: замала колодка" },
+    });
+  }
+  const reason = REASONS[code];
+  if (reason) await handleReasonText(orderId, reason);
+}
+
+export async function handleReasonText(orderId: number, reason: string) {
+  await saveRefusalReason(orderId, reason);
+  await send(`📝 №${orderId}: записав у KeyCRM «Причина відмови: ${esc(reason.trim())}».`);
 }
 
 export async function handleSent(orderId: number) {
