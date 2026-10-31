@@ -201,7 +201,9 @@ export async function handleManualPreview(text: string, messageId: number) {
       "🧾 <b>Перевірте замовлення (джерело «Дзвінок»):</b>",
       `👤 ${esc(order.name)}`,
       `📞 ${esc(order.phone)}`,
-      `🚚 Нова Пошта: ${esc(order.city)}, ${esc(order.warehouse.name)}`,
+      order.delivery.service === "ukrposhta"
+        ? `🚚 Укрпошта: ${esc(order.delivery.city)}, індекс ${esc(order.delivery.zip)}`
+        : `🚚 Нова Пошта: ${esc(order.delivery.city)}, ${esc(order.delivery.warehouse.name)}`,
       ...order.items.map((i) => `• ${esc(i.name)}, розмір ${esc(i.size)} (${esc(i.sku)}) = ${formatPrice(i.price)}`),
       `<b>Разом: ${formatPrice(total)}</b>, накладений платіж`,
     ].join("\n"),
