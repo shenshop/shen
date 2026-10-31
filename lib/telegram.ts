@@ -58,6 +58,8 @@ export async function telegram(method: string, body: object) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: process.env.TELEGRAM_CHAT_ID, ...body }),
   });
+  // Telegram відповідає помилкою, а не винятком: пишемо її в логи Cloudflare, щоб було видно, що не дійшло.
+  if (!res.ok) console.error(`Telegram ${method}: ${res.status} ${(await res.text().catch(() => "")).slice(0, 300)}`);
   return res.ok;
 }
 

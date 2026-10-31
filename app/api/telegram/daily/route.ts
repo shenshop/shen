@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { telegram } from "@/lib/telegram";
 import { handlePickups, webhookSecret } from "@/lib/telegram-bot";
+import { SITE_URL } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,9 @@ export async function POST(req: Request) {
   const kyivHour = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", hour12: false }));
   if (kyivHour !== 10) return NextResponse.json({ ok: true, skipped: kyivHour });
   try {
-    await handlePickups(new URL(req.url).origin, true);
+    // Запит від cron іде всередині Worker, і його адреса не завжди khoda.com.ua. Telegram не приймає
+    // кнопку «Відкрити Viber» з такою адресою і мовчки відкидає повідомлення, тому беремо адресу сайту.
+    await handlePickups(SITE_URL, true);
   } catch (e) {
     console.error(e);
     await telegram("sendMessage", { text: `⚠️ Щоденна перевірка посилок: ${String(e instanceof Error ? e.message : e).slice(0, 300)}` });
