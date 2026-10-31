@@ -293,7 +293,27 @@ export async function handleProductCreate(originalText: string, group: string, o
 export async function handlePhotoPreview(caption: string, messageId: number, group: string) {
   const sku = photoUpdateSku(caption);
   if (!sku) return;
-  const { product, offers, error } = await findProduct(sku);
+  const { product, offers, error, candidates } = await findProduct(sku);
+  if (candidates) {
+    // Кілька товарів з однаковим артикулом: Дрон вибирає кнопкою, і натискання одразу міняє фото.
+    return send(
+      [
+        `🖼 <b>Під «${esc(sku)}» підходить кілька товарів.</b> У який поставити нові фото?`,
+        ...candidates.map((c, i) => `${i + 1}. ${esc(c.name)} (артикули ${esc(c.code)}…, ID ${c.id})`),
+        "",
+        "Старі фото картки зміняться на нові, перше фото стане головним і стоятиме в усіх розмірах.",
+      ].join("\n"),
+      {
+        reply_parameters: { message_id: messageId },
+        reply_markup: {
+          inline_keyboard: [
+            ...candidates.map((c, i) => [{ text: `✅ ${i + 1}. ${c.name.slice(0, 40)}`, callback_data: `mkphoto:${group}:${c.id}` }]),
+            [{ text: "Ні", callback_data: "cancel" }],
+          ],
+        },
+      },
+    );
+  }
   if (!product) return send(`⚠️ Фото не замінено. ${esc(error ?? "")}`, { reply_parameters: { message_id: messageId } });
   const photos = await groupPhotos(group, messageId);
   await send(
@@ -311,9 +331,9 @@ export async function handlePhotoPreview(caption: string, messageId: number, gro
   );
 }
 
-export async function handlePhotoReplace(caption: string, group: string, origin: string, captionId?: number) {
+export async function handlePhotoReplace(caption: string, group: string, origin: string, captionId?: number, productId?: number) {
   const sku = photoUpdateSku(caption);
-  const { product, error } = sku ? await findProduct(sku) : { product: undefined, error: "Не бачу артикула в підписі." };
+  const { product, error } = sku ? await findProduct(sku, productId) : { product: undefined, error: "Не бачу артикула в підписі." };
   if (!product) return send(`⚠️ Фото не замінено. ${esc(error ?? "")}`);
   const pictures = await Promise.all((await groupPhotos(group, captionId)).map((id) => photoUrl(origin, id)));
   if (!pictures.length) return send("⚠️ Не бачу фото альбому. Надішліть альбом з підписом ще раз.");

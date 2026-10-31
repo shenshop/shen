@@ -76,10 +76,10 @@ export async function POST(req: Request) {
         if (original) await handleProductCreate(original, mkprod[1], new URL(req.url).origin, cb.message?.reply_to_message?.message_id);
         else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного повідомлення. Надішліть товар ще раз." });
       }
-      const mkphoto = cb.data?.match(/^mkphoto:(.+)$/);
+      const mkphoto = cb.data?.match(/^mkphoto:([^:]+)(?::(\d+))?$/);
       if (mkphoto) {
         const original = cb.message?.reply_to_message?.caption;
-        if (original) await handlePhotoReplace(original, mkphoto[1], new URL(req.url).origin, cb.message?.reply_to_message?.message_id);
+        if (original) await handlePhotoReplace(original, mkphoto[1], new URL(req.url).origin, cb.message?.reply_to_message?.message_id, mkphoto[2] ? Number(mkphoto[2]) : undefined);
         else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного альбому. Надішліть його ще раз." });
       }
       if (cb.data === "move") await handleMove();

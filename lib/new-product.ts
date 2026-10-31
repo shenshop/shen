@@ -297,7 +297,10 @@ async function allPages<T>(path: string): Promise<T[]> {
 }
 
 /** Товар за артикулом товару (1193 чорні), розміру (1193 чорні-38) або його початком (к10 → к10 чорні). */
-export async function findProduct(sku: string): Promise<{ product?: KProductRow; offers?: KOfferRow[]; error?: string }> {
+export async function findProduct(
+  sku: string,
+  productId?: number,
+): Promise<{ product?: KProductRow; offers?: KOfferRow[]; error?: string; candidates?: { id: number; name: string; code: string }[] }> {
   const [products, allOffers] = await Promise.all([
     allPages<KProductRow>("/products?filter[is_archived]=false"),
     allPages<KOfferRow>("/offers?filter[is_archived]=false"),
@@ -310,12 +313,14 @@ export async function findProduct(sku: string): Promise<{ product?: KProductRow;
     ]);
   // Точний збіг і збіги за початком разом: «к10» підходить і до «к10» (білі), і до «к10 чорні» — тоді перепитуємо.
   const ids = idsWhere((code) => code.startsWith(q));
-  const found = products.filter((p) => ids.has(p.id));
+  // productId — товар, який Дрон вибрав кнопкою, коли під артикул підходило кілька.
+  const found = products.filter((p) => ids.has(p.id) && (!productId || p.id === productId));
   if (!found.length) return { error: `У KeyCRM немає товару з артикулом «${sku}».` };
   if (found.length > 1) {
     const codes = (id: number) => baseSku(allOffers.find((o) => o.product_id === id)?.sku) || products.find((p) => p.id === id)?.sku || "";
     return {
-      error: `Під «${sku}» підходить кілька товарів: ${found.map((p) => `${p.name} (${codes(p.id)})`).join("; ")}. Напишіть артикул точніше, наприклад «Фото ${codes(found[0].id)}».`,
+      error: `Під «${sku}» підходить кілька товарів.`,
+      candidates: found.slice(0, 8).map((p) => ({ id: p.id, name: p.name, code: codes(p.id) })),
     };
   }
   const product = found[0];
