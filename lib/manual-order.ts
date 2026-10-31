@@ -3,13 +3,10 @@ import { request } from "./keycrm";
 import { normalizePhone } from "./format";
 import { searchCities, searchWarehouses } from "./novaposhta";
 
-// Замовлення з повідомлення в боті (клієнт подзвонив або написав). Кожне з нового рядка:
-//   Іваненко Іван 0671234567     ← імʼя і телефон в одному рядку або двома рядками
-//   Київ 25                      ← Нова Пошта: місто і номер відділення / поштомата («Нова Пошта Київ 25» теж можна)
-//     або
-//   Укрпошта індекс 12101        ← Укрпошта: індекс
-//   Смт. Хорошів                 ←   і населений пункт окремим рядком
-//   Olimp чорні 41               ← модель, колір, розмір; або точний артикул «221 кор-42». Кожна пара окремим рядком
+// Замовлення з повідомлення в боті (клієнт подзвонив або написав). Порядок будь-який, можна одним рядком:
+//   Житомирська обл. Смт. Хорошів Войцеховська Тетяна Іванівна Укрпошта 1 індекс 12101 .0960930843
+//   Olimp чорні 41               ← товар завжди окремим рядком: модель, колір, розмір або артикул «221 кор-42»
+// Доставка: Укрпошта за індексом («Індекс 29003») або Нова Пошта («Львів 26», «м. Київ, відділення 25», «НП 25»).
 // Нічого не створюємо, поки Дрон не натисне «Так» під перевіркою.
 
 const SOURCE = "дзвінок";
@@ -40,24 +37,10 @@ export type ManualOrder = {
 const PHONE = /(?:\+?\s*3\s*8\s*)?\(?0\d{2}\)?[\s\-]*\d{3}[\s\-]*\d{2}[\s\-]*\d{2}/;
 const splitLines = (text: string) => text.split("\n").map((l) => l.trim()).filter(Boolean);
 
-/** Імʼя і телефон: «Імʼя 0671234567» одним рядком або «Імʼя» / «0671234567» двома. Повертає, скільки рядків зайняли. */
-function nameAndPhone(lines: string[]): { name: string; phone: string; used: number } | null {
-  const inFirst = lines[0]?.match(PHONE);
-  if (inFirst) {
-    const phone = normalizePhone(inFirst[0]);
-    const name = lines[0].replace(inFirst[0], " ").replace(/[,;:]+/g, " ").replace(/\s+/g, " ").trim();
-    if (phone && name) return { name, phone, used: 1 };
-  }
-  const phone = lines[1] ? normalizePhone(lines[1]) : null;
-  if (lines[0] && phone) return { name: lines[0], phone, used: 2 };
-  return null;
-}
-
-/** Схоже на замовлення: телефон у 1-му рядку разом з імʼям або 2-м рядком, і ще щонайменше 2 рядки. */
+/** Схоже на замовлення: є телефон і ще щось, крім нього (імʼя, доставка, товар). */
 export const looksLikeOrder = (text: string) => {
-  const lines = splitLines(text);
-  const np = nameAndPhone(lines);
-  return np != null && lines.length - np.used >= 2;
+  const p = text.match(PHONE);
+  return !!p && normalizePhone(p[0]) != null && text.replace(p[0], " ").split(/\s+/).filter((w) => /[а-яіїєґa-z]/i.test(w)).length >= 2;
 };
 
 // Для пошуку моделі: латиниця і кирилиця в одне написання («Olimp» = «Олімп»), без пробілів і дефісів.
@@ -117,64 +100,145 @@ function matchItem(line: string, offers: KOffer[]): { offer?: KOffer; error?: st
   return { error: `Не знайшов у KeyCRM товар «${m[1].trim()}».` };
 }
 
-// Рядок Укрпошти: «Укрпошта індекс 12101» або просто «Індекс 29003».
-const UKR = /укрпошт|укр\.?\s*пошт|ukrposhta|^індекс[\s:№]*\d{5}|^\d{5}$/i;
-const NP_PREFIX = /^(?:нова\s*пошта|нп)\s*[,:.\-]?\s*/i;
 // «Смт. Хорошів», «м. Київ», «с.Іванівка» → назва без скорочення.
 const cleanCity = (s: string) => s.replace(/^(?:смт|м|с|сел|село|місто|пгт|г)\.?\s+|^(?:смт|м|с)\.(?=\S)/i, "").replace(/[,.]+$/, "").trim();
 
+// Ознаки доставки. Укрпошта: слово «Укрпошта», «індекс» або окреме 5-значне число.
+const UKR_WORD = /укр\.?\s*пошт\S*|ukrposhta/i;
+const ZIP = /(?:індекс\s*[:№]?\s*)?(?<![\d+])(\d{5})(?!\d)/i;
+// Нова Пошта: «відділення 26», «НП 26», «Нова пошта №26», «поштомат 1234», «№26».
+const NP_MARK = /(?:нова\s*пошта|(?<![а-яіїєґ])нп(?![а-яіїєґ])|відділення|відд\.?|поштомат|п\/м)\s*[№#:]?\s*(\d{1,5})(?!\d)|№\s*(\d{1,5})(?!\d)/i;
+const NP_WORD = /нова\s*пошта|(?<![а-яіїєґ])нп(?![а-яіїєґ])/gi;
+// «Житомирська обл.», «Хорошівський р-н» — область і район не потрібні.
+const REGION = /[А-ЯІЇЄҐа-яіїєґʼ'’\-]+\s+(?:обл\.?|область|р-н\.?|район)(?![а-яіїєґ])/gi;
+// «Смт. Хорошів», «м. Київ», «с.Іванівка».
+const SETTLEMENT = /(?<![А-Яа-яІіЇїЄєҐґ])(?:[Сс]мт|[Пп]гт|[Мм]істо|[Сс]ело|[Сс]ел|[Мм]|[Сс]|[Гг])\.?\s*([А-ЯІЇЄҐ][а-яіїєґʼ'’\-]+)/;
+const SIZE_END = /(?<!\d)(?:3[3-9]|4[0-8])(?:[.,]5)?\s*(?:р\.?|розмір)?\s*$/i;
+const tidy = (s: string) => s.replace(/[,;:.]+/g, " ").replace(/\s+/g, " ").trim();
+const words = (s: string) => tidy(s).split(" ").filter((w) => /[а-яіїєґa-z]/i.test(w));
+
+/**
+ * Розбирає повідомлення в будь-якому порядку, навіть одним рядком, як пишуть клієнти:
+ * «Житомирська обл. Смт. Хорошів Войцеховська Тетяна Іванівна Укрпошта 1 індекс 12101 .0960930843».
+ * Товар — окремим рядком «Olimp чорні 41» або артикулом.
+ */
 export async function parseManualOrder(text: string): Promise<{ order?: ManualOrder; error?: string }> {
-  const lines = splitLines(text);
-  const who = nameAndPhone(lines);
-  if (!who) return { error: "Не розібрав імʼя і телефон: напишіть їх першим рядком («Іваненко Іван 0671234567») або двома рядками." };
-  let rest = lines.slice(who.used);
+  const offers = await allOffers();
+  let phone: string | null = null;
+  let zip = "";
+  let ukr = UKR_WORD.test(text);
+  let npNumber = "";
+  let city = "";
+  const items: ManualOrder["items"] = [];
+  const chunks: { text: string; hadPhone: boolean }[] = [];
+  const places: { city: string; number: string }[] = []; // «Київ 25» — Нова Пошта старим форматом
+  const failed: { line: string; error: string }[] = []; // рядки з розміром у кінці, що не підійшли до жодного товару
+
+  for (const raw of splitLines(text)) {
+    let line = raw;
+    const p = line.match(PHONE);
+    const hadPhone = !!p && !!normalizePhone(p[0]);
+    if (p && hadPhone) {
+      phone ??= normalizePhone(p[0]);
+      line = line.replace(p[0], " ");
+    }
+    const delivery = UKR_WORD.test(line) || NP_MARK.test(line) || /індекс|обл|р-н|район/i.test(line);
+    // Товар: рядок без телефону й доставки, що закінчується розміром.
+    if (!hadPhone && !delivery && SIZE_END.test(line)) {
+      const { offer, error } = matchItem(tidy(line), offers);
+      if (offer) {
+        items.push({ sku: offer.sku ?? "", name: offer.product?.name?.trim() || offer.sku || "", size: sizeOf(offer), price: Number(offer.price) || 0 });
+        continue;
+      }
+      // «Київ 41» теж закінчується числом: якщо це не товар, вирішимо в кінці, чи це місто й відділення.
+      failed.push({ line: tidy(line), error: error ?? "" });
+      continue;
+    }
+    const z = line.match(ZIP);
+    if (z && (ukr || /індекс/i.test(z[0]) || !NP_MARK.test(line))) {
+      zip ||= z[1];
+      ukr = true;
+      line = line.replace(z[0], " ");
+    }
+    if (UKR_WORD.test(line)) {
+      // «Укрпошта 1» — номер відділення Укрпошти, він не потрібен: відділення визначає індекс.
+      line = line.replace(new RegExp(UKR_WORD.source + /\s*[№#]?\s*\d{0,3}(?!\d)/.source, "i"), " ");
+    }
+    if (!ukr) {
+      const n = line.match(NP_MARK);
+      if (n) {
+        npNumber ||= n[1] ?? n[2];
+        line = line.replace(n[0], " ");
+      }
+      line = line.replace(NP_WORD, " ");
+    }
+    line = line.replace(REGION, " ");
+    const s = line.match(SETTLEMENT);
+    if (s) {
+      city ||= s[1];
+      line = line.replace(s[0], " ");
+    }
+    line = line.replace(/індекс|відділення/gi, " ");
+    // Рядок без цифр і букв після всього цього — порожній.
+    if (words(line).length) {
+      // «Київ 25» окремим рядком без жодних позначок — Нова Пошта старим форматом.
+      const m = tidy(line).match(/^([^\d]+?)\s+(\d{1,5})$/);
+      if (m && !hadPhone && !ukr && !npNumber) { places.push({ city: m[1], number: m[2] }); continue; }
+      chunks.push({ text: words(line).join(" "), hadPhone });
+    }
+  }
+
+  // Рядок «Київ 41», що не виявився товаром, — відділення Нової Пошти, якщо іншої доставки немає.
+  if (!ukr && !npNumber && !places.length) {
+    const i = failed.findIndex((f) => /^[^\d]+?\s+\d{1,5}$/.test(f.line));
+    if (i >= 0) {
+      const m = failed[i].line.match(/^([^\d]+?)\s+(\d{1,5})$/)!;
+      places.push({ city: m[1], number: m[2] });
+      failed.splice(i, 1);
+    }
+  }
+  if (failed.length) return { error: failed[0].error };
+  if (!phone) return { error: "Не знайшов телефон. Напишіть номер, наприклад 0671234567." };
+  // Імʼя — шматок з телефоном або найдовший; інші короткі шматки — населений пункт.
+  const nameChunk = chunks.find((c) => c.hadPhone && words(c.text).length >= 2) ?? [...chunks].sort((a, b) => words(b.text).length - words(a.text).length)[0];
+  const others = chunks.filter((c) => c !== nameChunk);
+  let nameWords = nameChunk ? words(nameChunk.text) : [];
 
   let delivery: ManualOrder["delivery"];
-  const ukrIdx = rest.findIndex((l) => UKR.test(l));
-  if (ukrIdx >= 0) {
-    // Індекс шукаємо в рядку «Укрпошта …», а населений пункт — у сусідньому рядку без розміру.
-    let zip = rest[ukrIdx].match(/\b(\d{5})\b/)?.[1];
-    let cityText = rest[ukrIdx].replace(UKR, " ").replace(/укрпошт\S*/i, " ").replace(/\S*\d{5}\S*/, " ").replace(/індекс|відділення|№|[,:]/gi, " ").replace(/\s+/g, " ").trim();
-    const used = new Set([ukrIdx]);
-    if (!zip) {
-      const zi = rest.findIndex((l, i) => !used.has(i) && /^(?:індекс\s*)?\d{5}$/i.test(l));
-      if (zi >= 0) { zip = rest[zi].match(/\d{5}/)![0]; used.add(zi); }
-    }
+  if (ukr) {
     if (!zip) return { error: "Для Укрпошти потрібен індекс з 5 цифр, наприклад «Укрпошта індекс 12101»." };
-    if (!cityText || cityText.length < 2) {
-      // Населений пункт необовʼязковий: за індексом Укрпошта й так знає відділення.
-      const ci = rest.findIndex((l, i) => !used.has(i) && !/\d{2}(?:[.,]5)?\s*$/.test(l));
-      cityText = ci >= 0 ? rest[ci] : "";
-      if (ci >= 0) used.add(ci);
-    }
-    delivery = { service: "ukrposhta", city: cleanCity(cityText), zip };
-    rest = rest.filter((_, i) => !used.has(i));
+    if (!city && others.length) city = others[0].text;
+    delivery = { service: "ukrposhta", city: cleanCity(city), zip };
   } else {
-    // Нова Пошта: рядок одразу після імені й телефону.
-    const place = rest[0].replace(NP_PREFIX, "");
-    const m = place.match(/^(.*?)[,\s]+(?:відділення|відд\.?|поштомат|№)?\s*№?\s*(\d+)\s*$/i);
-    if (!m) return { error: "Після телефону напишіть місто і номер відділення Нової Пошти («Київ 25») або «Укрпошта індекс 12101»." };
-    const cityQuery = cleanCity(m[1].replace(/[,.]+$/, "").trim());
-    const number = m[2];
-    const cities = await searchCities(cityQuery);
-    const city = cities.find((c) => norm(c.name) === norm(cityQuery)) ?? cities[0];
-    if (!city) return { error: `Нова Пошта не знайшла місто «${cityQuery}».` };
-    const warehouses = await searchWarehouses(city.ref, number);
+    let number = npNumber;
+    let cityQuery = city;
+    if (places.length && !number) {
+      number = places[0].number;
+      cityQuery ||= places[0].city;
+    }
+    if (!number) return { error: "Не знайшов доставку. Напишіть місто і номер відділення Нової Пошти («Київ 25») або «Укрпошта індекс 12101»." };
+    // Місто без «м.»: беремо інший рядок або перевіряємо слова з імені — чи є таке місто в Новій Пошті.
+    const guesses = cityQuery ? [cityQuery] : [...others.map((c) => c.text), ...nameWords.filter((w) => /^[А-ЯІЇЄҐ]/.test(w)).reverse()].slice(0, 5);
+    let found: { name: string; ref: string } | undefined;
+    for (const g of guesses) {
+      const list = await searchCities(cleanCity(g));
+      found = list.find((c) => norm(c.name) === norm(cleanCity(g))) ?? (cityQuery ? list[0] : undefined);
+      if (found) {
+        if (!cityQuery) nameWords = nameWords.filter((w) => norm(w) !== norm(g));
+        break;
+      }
+    }
+    if (!found) return { error: cityQuery ? `Нова Пошта не знайшла місто «${cityQuery}».` : "Не зрозумів, яке місто. Напишіть, наприклад, «м. Київ, відділення 25»." };
+    const warehouses = await searchWarehouses(found.ref, number);
     const warehouse = warehouses.find((w) => w.number === number);
-    if (!warehouse) return { error: `У місті ${city.name} немає відділення чи поштомата №${number}.` };
-    delivery = { service: "novaposhta", city: city.name, warehouse: { name: warehouse.name, ref: warehouse.ref } };
-    rest = rest.slice(1);
+    if (!warehouse) return { error: `У місті ${found.name} немає відділення чи поштомата №${number}.` };
+    delivery = { service: "novaposhta", city: found.name, warehouse: { name: warehouse.name, ref: warehouse.ref } };
   }
 
-  if (!rest.length) return { error: "Не бачу товару: напишіть модель, колір і розмір, наприклад «Olimp чорні 41»." };
-  const offers = await allOffers();
-  const items: ManualOrder["items"] = [];
-  for (const line of rest) {
-    const { offer, error } = matchItem(line, offers);
-    if (!offer) return { error };
-    items.push({ sku: offer.sku ?? "", name: offer.product?.name?.trim() || offer.sku || "", size: sizeOf(offer), price: Number(offer.price) || 0 });
-  }
-  return { order: { name: who.name, phone: who.phone, delivery, items } };
+  const name = nameWords.join(" ");
+  if (!name) return { error: "Не знайшов імʼя отримувача." };
+  if (!items.length) return { error: "Не бачу товару: допишіть окремим рядком модель, колір і розмір, наприклад «Olimp чорні 41»." };
+  return { order: { name, phone, delivery, items } };
 }
 
 async function sourceId() {
