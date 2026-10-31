@@ -90,7 +90,8 @@ const describe = (o: KOffer) => `${o.product?.name?.trim() || "?"}${colourOf(o) 
 
 /** Пара за рядком «Olimp чорні 41»: усі слова мають бути в артикулі, назві або кольорі, розмір — точно. */
 function matchItem(line: string, offers: KOffer[]): { offer?: KOffer; error?: string } {
-  const exact = offers.filter((o) => norm(o.sku) === norm(line));
+  // Точний артикул, навіть якщо замість дефіса пробіл: «221 кор 42» = «221 кор-42».
+  const exact = offers.filter((o) => latin(o.sku) === latin(line));
   if (exact.length === 1) return { offer: exact[0] };
 
   const m = line.match(/^(.*?)[\s,\-]+(?:розмір|р\.?)?\s*(\d{2}(?:[.,]5)?)\s*(?:розмір|р\.?)?$/i);
@@ -116,7 +117,8 @@ function matchItem(line: string, offers: KOffer[]): { offer?: KOffer; error?: st
   return { error: `Не знайшов у KeyCRM товар «${m[1].trim()}».` };
 }
 
-const UKR = /укрпошт|укр\.?\s*пошт|ukrposhta/i;
+// Рядок Укрпошти: «Укрпошта індекс 12101» або просто «Індекс 29003».
+const UKR = /укрпошт|укр\.?\s*пошт|ukrposhta|^індекс[\s:№]*\d{5}|^\d{5}$/i;
 const NP_PREFIX = /^(?:нова\s*пошта|нп)\s*[,:.\-]?\s*/i;
 // «Смт. Хорошів», «м. Київ», «с.Іванівка» → назва без скорочення.
 const cleanCity = (s: string) => s.replace(/^(?:смт|м|с|сел|село|місто|пгт|г)\.?\s+|^(?:смт|м|с)\.(?=\S)/i, "").replace(/[,.]+$/, "").trim();
@@ -132,7 +134,7 @@ export async function parseManualOrder(text: string): Promise<{ order?: ManualOr
   if (ukrIdx >= 0) {
     // Індекс шукаємо в рядку «Укрпошта …», а населений пункт — у сусідньому рядку без розміру.
     let zip = rest[ukrIdx].match(/\b(\d{5})\b/)?.[1];
-    let cityText = rest[ukrIdx].replace(UKR, " ").replace(/\S*\d{5}\S*/, " ").replace(/індекс|відділення|№|[,:]/gi, " ").replace(/\s+/g, " ").trim();
+    let cityText = rest[ukrIdx].replace(UKR, " ").replace(/укрпошт\S*/i, " ").replace(/\S*\d{5}\S*/, " ").replace(/індекс|відділення|№|[,:]/gi, " ").replace(/\s+/g, " ").trim();
     const used = new Set([ukrIdx]);
     if (!zip) {
       const zi = rest.findIndex((l, i) => !used.has(i) && /^(?:індекс\s*)?\d{5}$/i.test(l));
@@ -140,10 +142,10 @@ export async function parseManualOrder(text: string): Promise<{ order?: ManualOr
     }
     if (!zip) return { error: "Для Укрпошти потрібен індекс з 5 цифр, наприклад «Укрпошта індекс 12101»." };
     if (!cityText || cityText.length < 2) {
+      // Населений пункт необовʼязковий: за індексом Укрпошта й так знає відділення.
       const ci = rest.findIndex((l, i) => !used.has(i) && !/\d{2}(?:[.,]5)?\s*$/.test(l));
-      if (ci < 0) return { error: "Для Укрпошти напишіть окремим рядком населений пункт, наприклад «смт Хорошів»." };
-      cityText = rest[ci];
-      used.add(ci);
+      cityText = ci >= 0 ? rest[ci] : "";
+      if (ci >= 0) used.add(ci);
     }
     delivery = { service: "ukrposhta", city: cleanCity(cityText), zip };
     rest = rest.filter((_, i) => !used.has(i));
@@ -192,7 +194,7 @@ export async function createManualOrder(o: ManualOrder) {
         ? {
             delivery_service_id: Number(process.env.KEYCRM_UKRPOSHTA_ID) || undefined,
             shipping_service: "Укрпошта",
-            shipping_address_city: o.delivery.city,
+            shipping_address_city: o.delivery.city || undefined,
             shipping_address_country: "Ukraine",
             shipping_address_zip: o.delivery.zip,
             shipping_receive_point: `Відділення ${o.delivery.zip}`,
