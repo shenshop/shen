@@ -337,11 +337,14 @@ export async function handlePhotoReplace(caption: string, group: string, origin:
   if (!product) return send(`⚠️ Фото не замінено. ${esc(error ?? "")}`);
   const pictures = await Promise.all((await groupPhotos(group, captionId)).map((id) => photoUrl(origin, id)));
   if (!pictures.length) return send("⚠️ Не бачу фото альбому. Надішліть альбом з підписом ще раз.");
-  const r = await replacePhotos(product.id, pictures);
+  const r = await replacePhotos(product.id, pictures, caption);
+  if ("error" in r) return send(`⚠️ Фото не замінено. ${esc(r.error ?? "")}`);
   await send(
     [
-      `✅ Фото в «${esc(product.name)}» замінено.`,
-      `У картці: ${r.photos ?? "?"} з ${pictures.length} · у розмірах: ${r.sizePhotos} з ${r.sizes}`,
+      r.colour
+        ? `✅ Фото розмірів кольору «${esc(r.colour)}» у «${esc(product.name)}» замінено на перше фото альбому. Фото картки не чіпав: там фото всіх кольорів.`
+        : `✅ Фото в «${esc(product.name)}» замінено.`,
+      `${r.colour ? "" : `У картці: ${r.photos ?? "?"} з ${pictures.length} · `}у розмірах: ${r.sizePhotos} з ${r.sizes}`,
       r.photos != null && r.photos < pictures.length ? "⚠️ Не всі фото збереглися, гляньте картку." : "",
       "",
       `На сайті оновиться протягом години, або одразу після «${REFRESH_BUTTON}».`,

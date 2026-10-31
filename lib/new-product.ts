@@ -327,17 +327,37 @@ export async function findProduct(
   return { product, offers: allOffers.filter((o) => o.product_id === product.id) };
 }
 
-export async function replacePhotos(productId: number, pictures: string[]) {
-  await request(`/products/${productId}`, { method: "PUT", ...fresh, body: JSON.stringify({ pictures }) });
+const colourOf = (o: KOfferRow) => o.properties?.find((p) => /колір|цвет|color/i.test(p.name))?.value?.trim() ?? "";
+// «чорні» і «Чорний», «білі» і «Білий»: порівнюємо перші 4 літери.
+const sameColour = (a: string, b: string) => a.length >= 3 && b.length >= 3 && norm(a).slice(0, 4) === norm(b).slice(0, 4);
+
+/**
+ * Нові фото в картку і в розміри. Якщо в товарі кілька кольорів (к10: чорні й білі), картку не чіпаємо,
+ * бо там фото обох кольорів, а міняємо фото лише в розмірах кольору, названого в підписі («Фото к10 чорні»).
+ */
+export async function replacePhotos(productId: number, pictures: string[], caption = "") {
   const offers = rows(await request<List<KOfferRow>>(`/offers?filter[product_id]=${productId}&limit=50`, fresh));
-  if (offers.length) {
-    await request("/offers", { method: "PUT", ...fresh, body: JSON.stringify({ offers: offers.map((o) => ({ id: o.id, image_url: pictures[0] })) }) });
+  const colours = [...new Set(offers.map(colourOf).filter(Boolean))];
+  let targets = offers;
+  let colour: string | null = null;
+  if (colours.length > 1) {
+    const words = norm(caption).split(/[^\p{L}\d]+/u);
+    colour = colours.find((c) => words.some((w) => sameColour(w, c))) ?? null;
+    if (!colour) return { error: `У товарі кілька кольорів (${colours.join(", ")}). Напишіть колір у підписі, наприклад «Фото … ${colours[0].toLowerCase()}».` };
+    targets = offers.filter((o) => colourOf(o) === colour);
+  } else {
+    await request(`/products/${productId}`, { method: "PUT", ...fresh, body: JSON.stringify({ pictures }) });
   }
-  const saved = await readBack<{ attachments_data?: string[] | null }>(`/products/${productId}`);
+  if (targets.length) {
+    await request("/offers", { method: "PUT", ...fresh, body: JSON.stringify({ offers: targets.map((o) => ({ id: o.id, image_url: pictures[0] })) }) });
+  }
+  const saved = colour ? null : await readBack<{ attachments_data?: string[] | null }>(`/products/${productId}`);
   const after = rows((await readBack<List<KOfferRow>>(`/offers?filter[product_id]=${productId}&limit=50`)) ?? []);
+  const ids = new Set(targets.map((o) => o.id));
   return {
+    colour,
     photos: saved?.attachments_data?.length ?? null,
-    sizes: offers.length,
-    sizePhotos: after.filter((o) => o.image_url || o.thumbnail_url).length,
+    sizes: targets.length,
+    sizePhotos: after.filter((o) => ids.has(o.id) && (o.image_url || o.thumbnail_url)).length,
   };
 }
