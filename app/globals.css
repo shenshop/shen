@@ -160,7 +160,9 @@ body.scroll-lock { position: fixed; left: 0; right: 0; overflow: hidden; }
 .card-link:hover .card-image img { transform: scale(1.04); }
 .tag { position: absolute; top: 10px; left: 10px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; padding: 4px 8px; border-radius: 6px; }
 .card-link { display: flex; flex-direction: column; gap: 10px; }
-.card-buy { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.card-buy { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+/* Розміри одразу під ціною, а «Купити» внизу картки, щоб кнопки в ряду були на одній лінії. */
+.card-buy .card-btn { margin-top: auto; }
 .card-sizes { display: flex; flex-wrap: wrap; gap: 6px; border-radius: 10px; }
 .card-size { min-width: 38px; height: 34px; padding: 0 6px; border-radius: 9px; border: 1.5px solid var(--line); background: var(--surface); font-weight: 600; font-size: 14px; }
 .card-size:hover:not(:disabled) { border-color: var(--text); }
