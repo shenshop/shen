@@ -4,6 +4,7 @@ import { request } from "./keycrm";
 import { esc, telegram } from "./telegram";
 import { sizeChartFor } from "@/data/sizes";
 import { SITE_URL } from "./seo";
+import { faqAnswer, matchFaq, MENU } from "./shop-bot-faq";
 
 // Бот для клієнтів (окремий від робочого бота Дрона). Ключ — секрет SHOP_BOT_TOKEN у Cloudflare.
 // Клієнт потрапляє в бот кнопкою на сторінці «Дякуємо» (t.me/<бот>?start=o<номер>_<підпис>):
@@ -103,9 +104,8 @@ function itemLine(p: NonNullable<KOrder["products"]>[number]) {
 }
 const firstName = (o: KOrder) => o.buyer?.full_name?.trim().split(/\s+/).slice(1, 2)[0] || o.buyer?.full_name?.trim().split(/\s+/)[0] || "";
 
-const CATALOG = { inline_keyboard: [[{ text: "🛒 Каталог взуття", url: `${SITE_URL}/catalog` }]] };
 const WELCOME =
-  "Вітаємо в SHEN! 👟\n\nТут можна:\n• підтвердити розмір замовлення\n• отримати номер ТТН, щойно посилку відправлять\n• поставити будь-яке питання про взуття\n\nНапишіть, що вас цікавить, і ми відповімо найближчим часом.";
+  "Вітаємо в SHEN! 👟\n\nТут можна:\n• підтвердити розмір замовлення\n• отримати номер ТТН, щойно посилку відправлять\n• поставити будь-яке питання про взуття\n\nОберіть кнопку внизу або напишіть своє питання. Каталог — кнопка «Каталог» зліва від поля вводу.";
 
 type Message = {
   message_id: number;
@@ -141,7 +141,7 @@ export async function handleShopUpdate(update: Update) {
     const sizes = (order.products ?? []).map(sizeOf).filter(Boolean).join(", ");
     if (m[1] === "ok") {
       await addComment(id, `Розмір підтверджено клієнтом у Telegram (${sizes})`);
-      await shopBot("sendMessage", { chat_id: chat, text: "Дякуємо! Розмір підтверджено ✅\nНомер ТТН надішлемо сюди, щойно посилку відправимо." });
+      await shopBot("sendMessage", { chat_id: chat, text: "Дякуємо! Розмір підтверджено ✅\nНомер ТТН надішлемо сюди, щойно посилку відправимо.", reply_markup: MENU });
       await note(chat, `✅ Клієнт підтвердив розмір ${sizes} (№${id})`);
       await telegram("sendMessage", { text: `✅ №${id}${order.buyer?.full_name ? ` · ${esc(order.buyer.full_name)}` : ""}: клієнт підтвердив розмір ${esc(sizes)} у Telegram.`, parse_mode: "HTML" });
     } else {
@@ -187,7 +187,7 @@ export async function handleShopUpdate(update: Update) {
       }
       return;
     }
-    await shopBot("sendMessage", { chat_id: chat, text: WELCOME, reply_markup: CATALOG });
+    await shopBot("sendMessage", { chat_id: chat, text: WELCOME, reply_markup: MENU });
     return;
   }
 
@@ -195,6 +195,23 @@ export async function handleShopUpdate(update: Update) {
   const orders = JSON.parse((await kv().get(chatKey(chat))) ?? "[]") as number[];
   const waitingSize = await kv().get(awaitKey(chat));
   const who = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(" ") + (msg.from?.username ? ` @${msg.from.username}` : "");
+
+  // Кнопки й типові питання (доставка, обмін, розміри, де замовлення) — бот відповідає сам.
+  const faq = !waitingSize && text ? matchFaq(text) : null;
+  if (faq) {
+    const answer = await faqAnswer(faq.topic, orders).catch(() => null);
+    if (answer) {
+      await shopBot("sendMessage", { chat_id: chat, text: answer, parse_mode: "HTML", reply_markup: MENU, link_preview_options: { is_disabled: true } });
+      if (await groupId()) {
+        await copyToTopic(chat, msg, topicTitle(msg, orders));
+        await note(chat, `🤖 Бот відповів сам:\n${answer.replace(/<[^>]+>/g, "")}`);
+        return;
+      }
+      // Кнопка — Дронові не пересилаємо. Питання своїми словами — пересилаємо, раптом там ще щось.
+      if (faq.button) return;
+    } else faq.button = false;
+  }
+
   // Є група — повідомлення в тему клієнта; ні (або не вдалося) — як раніше, у робочий бот.
   let delivered = false;
   if (await groupId()) {
@@ -222,7 +239,7 @@ export async function handleShopUpdate(update: Update) {
     await kv().delete(awaitKey(chat));
     await addComment(Number(waitingSize), `Клієнт у Telegram просить інший розмір: ${text.slice(0, 300)}`).catch(console.error);
     await shopBot("sendMessage", { chat_id: chat, text: "Дякуємо! Передали менеджеру, він уточнить і змінить розмір у замовленні 👌" });
-  } else if (!(await kv().get(talkKey(chat)))) {
+  } else if (!faq && !(await kv().get(talkKey(chat)))) {
     await shopBot("sendMessage", { chat_id: chat, text: "Дякуємо! Менеджер відповість тут найближчим часом 🙌" });
     await kv().put(talkKey(chat), "1", { expirationTtl: TALK_TTL });
   }
