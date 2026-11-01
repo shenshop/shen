@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
+import { HeroSlider } from "@/components/hero-slider";
 import { getCatalog, getFeatured } from "@/lib/catalog";
 import { ProductCard } from "@/components/product-card";
 import { Benefits } from "@/components/benefits";
@@ -14,7 +14,11 @@ export const revalidate = 3600;
 
 export default async function Home() {
   const [featured, { categories }] = await Promise.all([getFeatured(), getCatalog()]);
-  const hero = featured[0];
+  // Перші 5 хітів гортаються в шапці.
+  const heroSlides = featured
+    .filter((p) => p.images[0])
+    .slice(0, 5)
+    .map((p) => ({ slug: p.slug, name: p.name, image: p.images[0], price: p.price }));
   const subcategories = categories.filter((c) => c.parentId != null).slice(0, 6);
 
   return (
@@ -34,11 +38,7 @@ export default async function Home() {
               </Link>
             </div>
           </div>
-          {hero && (
-            <Link href={`/product/${hero.slug}`} className="hero-image">
-              <Image src={hero.images[0]} alt={hero.name} fill priority sizes="(max-width: 800px) 100vw, 50vw" unoptimized={hero.images[0].endsWith(".svg")} />
-            </Link>
-          )}
+          {heroSlides.length > 0 && <HeroSlider slides={heroSlides} />}
         </div>
       </section>
 
