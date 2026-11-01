@@ -44,6 +44,9 @@ const orderKey = (id: number) => `shopbot:order:${id}`;
 const chatKey = (chat: number) => `shopbot:chat:${chat}`;
 const relayKey = (msg: number) => `shopbot:relay:${msg}`;
 const awaitKey = (chat: number) => `shopbot:await:${chat}`;
+// Розмова триває: автовідповідь «Менеджер відповість…» не повторюємо 6 годин після неї або після відповіді Дрона.
+const talkKey = (chat: number) => `shopbot:talk:${chat}`;
+const TALK_TTL = 60 * 60 * 6;
 
 /** Чат клієнта, який привʼязав це замовлення в боті, або null. */
 export async function chatForOrder(id: number) {
@@ -177,8 +180,9 @@ export async function handleShopUpdate(update: Update) {
     await kv().delete(awaitKey(chat));
     await addComment(Number(waitingSize), `Клієнт у Telegram просить інший розмір: ${text.slice(0, 300)}`).catch(console.error);
     await shopBot("sendMessage", { chat_id: chat, text: "Дякуємо! Передали менеджеру, він уточнить і змінить розмір у замовленні 👌" });
-  } else {
+  } else if (!(await kv().get(talkKey(chat)))) {
     await shopBot("sendMessage", { chat_id: chat, text: "Дякуємо! Менеджер відповість тут найближчим часом 🙌" });
+    await kv().put(talkKey(chat), "1", { expirationTtl: TALK_TTL });
   }
 }
 
@@ -188,6 +192,7 @@ export async function relayOwnerReply(replyToMessageId: number | undefined, text
   const chat = await kv().get(relayKey(replyToMessageId));
   if (!chat) return false;
   const ok = (await shopBot("sendMessage", { chat_id: Number(chat), text })).ok;
+  if (ok) await kv().put(talkKey(Number(chat)), "1", { expirationTtl: TALK_TTL });
   await telegram("sendMessage", { text: ok ? "✉️ Надіслано клієнту в Telegram." : "⚠️ Не вдалося надіслати: клієнт, мабуть, зупинив бот. Напишіть йому у Viber." });
   return true;
 }
