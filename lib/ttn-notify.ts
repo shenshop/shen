@@ -89,6 +89,5 @@ export function viberDigits(phone: string) {
 }
 
 export function customerText(n: TtnNotice) {
-  const track = n.nova ? `\nВідстежити: https://novaposhta.ua/tracking/?cargo_number=${n.ttn}` : "";
-  return `Доброго дня! Ваше замовлення відправлено ${n.nova ? "Новою Поштою" : "Укрпоштою"} 📦\nНомер ТТН: ${n.ttn}${track}\n\nДякуємо за покупку! SHEN`;
+  return `Доброго дня! Ваше замовлення передано в доставку ${n.nova ? "Новою Поштою" : "Укрпоштою"} 📦\nНомер ТТН: ${n.ttn}\n\nДякуємо за покупку! SHEN`;
 }
