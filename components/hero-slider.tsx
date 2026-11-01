@@ -33,7 +33,7 @@ export function HeroSlider({ slides }: { slides: Slide[] }) {
   const pause = () => (pausedUntil.current = Date.now() + 60_000);
 
   return (
-    <div className="hero-image hero-slider">
+    <div className="hero-slider">
       <div
         className="hero-track"
         ref={track}
@@ -43,6 +43,7 @@ export function HeroSlider({ slides }: { slides: Slide[] }) {
       >
         {slides.map((s, i) => (
           <Link key={s.slug} href={`/product/${s.slug}`} className="hero-slide" aria-label={s.name}>
+            <span className="hero-photo">
             <Image
               src={s.image}
               alt={s.name}
@@ -52,6 +53,7 @@ export function HeroSlider({ slides }: { slides: Slide[] }) {
               sizes="(max-width: 800px) 100vw, 50vw"
               unoptimized={s.image.endsWith(".svg")}
             />
+            </span>
             <span className="hero-caption">
               <span>{s.name}</span>
               <strong>{formatPrice(s.price)}</strong>
