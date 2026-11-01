@@ -59,6 +59,8 @@ p { margin: 0 0 12px; }
 .btn-dark:hover { background: #2d2925; }
 .btn-light { background: var(--surface); border-color: var(--line); }
 .btn-light:hover { border-color: var(--text); }
+.btn-telegram { background: #229ed9; border-color: #229ed9; color: #fff; margin-bottom: 4px; }
+.btn-telegram:hover { background: #1c8bc0; }
 .btn-block { width: 100%; }
 .icon-btn { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 50%; }
 .icon-btn:hover { background: var(--surface-2); }

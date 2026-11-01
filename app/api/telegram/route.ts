@@ -3,6 +3,7 @@ import { telegram } from "@/lib/telegram";
 import { markRefusalDone } from "@/lib/refusals";
 import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
+import { relayOwnerReply } from "@/lib/shop-bot";
 import { looksLikeProduct, photoUpdateSku, rememberPhoto } from "@/lib/new-product";
 import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
@@ -16,7 +17,7 @@ type Update = {
     caption?: string;
     media_group_id?: string;
     photo?: { file_id: string; width: number }[];
-    reply_to_message?: { text?: string };
+    reply_to_message?: { message_id?: number; text?: string };
   };
   callback_query?: {
     id: string;
@@ -100,6 +101,10 @@ export async function POST(req: Request) {
       }
     } else {
       const text = update.message?.text?.trim() ?? "";
+      // Відповідь на питання клієнта з бота SHEN: пересилаємо її клієнту.
+      if (await relayOwnerReply(update.message?.reply_to_message?.message_id, update.message?.text ?? "")) {
+        return NextResponse.json({ ok: true });
+      }
       const reasonFor = update.message?.reply_to_message?.text?.match(REASON_PROMPT);
       if (reasonFor && text) {
         await handleReasonText(Number(reasonFor[1]), text);

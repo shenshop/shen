@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { orderLink } from "@/lib/shop-bot";
 
 export const metadata: Metadata = { title: "Дякуємо за замовлення", robots: { index: false } };
 
@@ -7,6 +8,7 @@ type Props = { searchParams: Promise<{ order?: string; quick?: string }> };
 
 export default async function ThanksPage({ searchParams }: Props) {
   const { order, quick } = await searchParams;
+  const bot = order && !quick ? await orderLink(Number(order)).catch(() => null) : null;
   return (
     <section className="container section thanks">
       <div className="thanks-mark">✓</div>
@@ -15,8 +17,15 @@ export default async function ThanksPage({ searchParams }: Props) {
       <p className="muted">
         {quick
           ? "Ми передзвонимо найближчим часом, щоб уточнити доставку."
-          : "Менеджер звʼяжеться з вами для підтвердження, а номер ТТН прийде в SMS після відправки."}
+          : bot
+            ? "Підтвердіть розмір у нашому Telegram-боті: туди ж прийде номер ТТН після відправки. Або менеджер звʼяжеться з вами сам."
+            : "Менеджер звʼяжеться з вами для підтвердження, а номер ТТН прийде в SMS після відправки."}
       </p>
+      {bot && (
+        <a href={bot} className="btn btn-telegram" target="_blank" rel="noopener">
+          ✈️ Підтвердити розмір і отримати ТТН у Telegram
+        </a>
+      )}
       <Link href="/catalog" className="btn btn-light">
         Повернутися до каталогу
       </Link>

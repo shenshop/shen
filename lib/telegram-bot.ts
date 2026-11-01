@@ -6,6 +6,7 @@ import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./tt
 import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
 import { createManualOrder, parseManualOrder } from "./manual-order";
+import { autoSendPickups, autoSendTtns } from "./shop-bot-jobs";
 import { createNewProduct, findProduct, groupPhotos, MAX_PHOTOS, parseNewProduct, photoUpdateSku, photoUrl, replacePhotos } from "./new-product";
 import { formatPrice } from "./format";
 
@@ -106,7 +107,10 @@ export async function handleMove() {
 // Кожне відправлене замовлення окремим повідомленням: текст для клієнта (торкнутися, щоб скопіювати),
 // кнопка відкрити чат у Viber і кнопка «Надіслано», яка ставить тег у KeyCRM.
 export async function handleTtnList(origin: string) {
-  const list = await ordersToNotify();
+  const all = await ordersToNotify();
+  // Тим, хто підключив бот для клієнтів, ТТН іде туди автоматично; у списку лишаються решта.
+  const auto = new Set(await autoSendTtns(all));
+  const list = all.filter((n) => !auto.has(n.id));
   if (!list.length) {
     return send(
       `📮 Немає відправлених замовлень, яким ще не надіслали ТТН.\n\n` +
@@ -154,7 +158,9 @@ export async function handleRefusals(origin: string) {
 
 // Посилки, що лежать у відділенні з 3-го дня. quiet: щоденна перевірка мовчить, коли список порожній.
 export async function handlePickups(origin: string, quiet = false) {
-  const list = await pickupsWaiting();
+  const all = await pickupsWaiting();
+  const auto = new Set(await autoSendPickups(all));
+  const list = all.filter((p) => !auto.has(p.id));
   if (!list.length) return quiet ? undefined : send("📬 Немає посилок, які лежать у відділенні 3-й день і довше.");
   await send(`📬 <b>Посилки чекають у відділенні, клієнт не забрав: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
   for (const p of list) {
