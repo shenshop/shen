@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   openGraph: { type: "website", locale: "uk_UA", siteName: settings.shopName },
 };
 
-export const viewport: Viewport = { themeColor: "#faf8f5", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#faf8f5", width: "device-width", initialScale: 1, maximumScale: 1 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { categories } = await getCatalog();
