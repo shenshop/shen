@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { telegram } from "@/lib/telegram";
 import { webhookSecret } from "@/lib/telegram-bot";
 import { autoSendTtns } from "@/lib/shop-bot-jobs";
+import { remindSilent } from "@/lib/shop-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,12 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error(e);
     await telegram("sendMessage", { text: `⚠️ Автоматичні ТТН у Telegram: ${String(e instanceof Error ? e.message : e).slice(0, 300)}` });
+  }
+  try {
+    await remindSilent();
+  } catch (e) {
+    console.error(e);
+    await telegram("sendMessage", { text: `⚠️ Нагадування клієнтам у Telegram: ${String(e instanceof Error ? e.message : e).slice(0, 300)}` });
   }
   return NextResponse.json({ ok: true });
 }

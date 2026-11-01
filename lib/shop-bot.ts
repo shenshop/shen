@@ -37,6 +37,7 @@ type KV = {
   put(key: string, value: string, opts?: { expirationTtl?: number }): Promise<void>;
   get(key: string): Promise<string | null>;
   delete(key: string): Promise<void>;
+  list(opts: { prefix: string }): Promise<{ keys: { name: string }[] }>;
 };
 const kv = () => (getCloudflareContext().env as unknown as { NEXT_INC_CACHE_KV: KV }).NEXT_INC_CACHE_KV;
 const YEAR = 60 * 60 * 24 * 365;
@@ -47,6 +48,11 @@ const awaitKey = (chat: number) => `shopbot:await:${chat}`;
 // Розмова триває: автовідповідь «Менеджер відповість…» не повторюємо 6 годин після неї або після відповіді Дрона.
 const talkKey = (chat: number) => `shopbot:talk:${chat}`;
 const TALK_TTL = 60 * 60 * 6;
+// Чекаємо відповіді клієнта: якщо мовчить 2+ години, бот один раз перепитує (щогодинний cron).
+const silentKey = (chat: number) => `shopbot:silent:${chat}`;
+type Silent = { at: number; order?: number };
+const expectAnswer = (chat: number, order?: number) =>
+  kv().put(silentKey(chat), JSON.stringify({ at: Date.now(), order } satisfies Silent), { expirationTtl: 60 * 60 * 24 });
 
 /** Чат клієнта, який привʼязав це замовлення в боті, або null. */
 export async function chatForOrder(id: number) {
@@ -100,8 +106,14 @@ const WELCOME =
 type Message = { message_id: number; chat: { id: number }; from?: { first_name?: string; last_name?: string; username?: string }; text?: string; caption?: string; photo?: unknown[] };
 type Update = { message?: Message; callback_query?: { id: string; data?: string; from: { id: number }; message?: Message } };
 
+const sizeButtons = (id: number) => ({
+  inline_keyboard: [[{ text: "✅ Так, все вірно", callback_data: `ok:${id}` }, { text: "🔄 Інший розмір", callback_data: `chg:${id}` }]],
+});
+
 export async function handleShopUpdate(update: Update) {
   const cb = update.callback_query;
+  const from = cb?.message?.chat.id ?? update.message?.chat.id;
+  if (from) await kv().delete(silentKey(from));
   if (cb?.message) {
     await shopBot("answerCallbackQuery", { callback_query_id: cb.id });
     const chat = cb.message.chat.id;
@@ -120,6 +132,7 @@ export async function handleShopUpdate(update: Update) {
     } else {
       await kv().put(awaitKey(chat), String(id), { expirationTtl: 60 * 60 * 24 * 3 });
       await shopBot("sendMessage", { chat_id: chat, text: "Напишіть, будь ласка, який розмір потрібен, або довжину стопи в сантиметрах — підберемо 🙌" });
+      await expectAnswer(chat);
     }
     return;
   }
@@ -149,8 +162,9 @@ export async function handleShopUpdate(update: Update) {
           "",
           "Перевірте, будь ласка, розмір. Все вірно?",
         ].join("\n"),
-        reply_markup: { inline_keyboard: [[{ text: "✅ Так, все вірно", callback_data: `ok:${id}` }, { text: "🔄 Інший розмір", callback_data: `chg:${id}` }]] },
+        reply_markup: sizeButtons(id),
       });
+      await expectAnswer(chat, id);
       return;
     }
     await shopBot("sendMessage", { chat_id: chat, text: WELCOME, reply_markup: CATALOG });
@@ -193,6 +207,8 @@ export async function relayOwnerReply(replyToMessageId: number | undefined, text
   if (!chat) return false;
   const ok = (await shopBot("sendMessage", { chat_id: Number(chat), text })).ok;
   if (ok) await kv().put(talkKey(Number(chat)), "1", { expirationTtl: TALK_TTL });
+  // Перепитуємо лише якщо Дрон щось запитав, а не на «Дякуємо, гарного дня».
+  if (ok && text.includes("?")) await expectAnswer(Number(chat));
   await telegram("sendMessage", { text: ok ? "✉️ Надіслано клієнту в Telegram." : "⚠️ Не вдалося надіслати: клієнт, мабуть, зупинив бот. Напишіть йому у Viber." });
   return true;
 }
@@ -217,4 +233,29 @@ export async function setupShopBot(origin: string) {
   await shopBot("setMyShortDescription", { short_description: "SHEN — шкіряне взуття. Розмір, ТТН і питання про замовлення." });
   await shopBot("setChatMenuButton", { menu_button: { type: "web_app", text: "Каталог", web_app: { url: `${SITE_URL}/catalog` } } });
   return { ok: webhook.ok, username: await botUsername() };
+}
+
+/** Щогодини: клієнтам, які мовчать 2+ години після нашого питання, бот один раз нагадує. Вночі не турбуємо. */
+export async function remindSilent() {
+  if (!shopBotEnabled()) return 0;
+  const hour = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Kyiv", hour: "numeric", hour12: false }));
+  if (hour < 9 || hour >= 21) return 0;
+  let sent = 0;
+  for (const { name } of (await kv().list({ prefix: "shopbot:silent:" })).keys) {
+    const raw = await kv().get(name);
+    if (!raw) continue;
+    const w = JSON.parse(raw) as Silent;
+    if (Date.now() - w.at < 2 * 60 * 60 * 1000) continue;
+    const chat = Number(name.slice("shopbot:silent:".length));
+    await kv().delete(name);
+    const res = w.order
+      ? await shopBot("sendMessage", {
+          chat_id: chat,
+          text: `Нагадуємо 🙂 Підтвердіть, будь ласка, розмір для замовлення №${w.order}, щоб ми його відправили.`,
+          reply_markup: sizeButtons(w.order),
+        })
+      : await shopBot("sendMessage", { chat_id: chat, text: "Ви бачили наше повідомлення вище? 🙂 Напишіть, будь ласка, як вам зручно." });
+    if (res.ok) sent++;
+  }
+  return sent;
 }
