@@ -48,6 +48,10 @@ const awaitKey = (chat: number) => `shopbot:await:${chat}`;
 // Розмова триває: автовідповідь «Менеджер відповість…» не повторюємо 6 годин після неї або після відповіді Дрона.
 const talkKey = (chat: number) => `shopbot:talk:${chat}`;
 const TALK_TTL = 60 * 60 * 6;
+// Група «SHEN Клієнти» з темами: кожен клієнт — окрема тема. Дрон пише в тему — бот пересилає клієнту.
+const GROUP_KEY = "shopbot:group";
+const topicKey = (chat: number) => `shopbot:topic:${chat}`;
+const topicChatKey = (thread: number) => `shopbot:topicchat:${thread}`;
 // Чекаємо відповіді клієнта: якщо мовчить 2+ години, бот один раз перепитує (щогодинний cron).
 const silentKey = (chat: number) => `shopbot:silent:${chat}`;
 type Silent = { at: number; order?: number };
@@ -103,7 +107,16 @@ const CATALOG = { inline_keyboard: [[{ text: "🛒 Каталог взуття",
 const WELCOME =
   "Вітаємо в SHEN! 👟\n\nТут можна:\n• підтвердити розмір замовлення\n• отримати номер ТТН, щойно посилку відправлять\n• поставити будь-яке питання про взуття\n\nНапишіть, що вас цікавить, і ми відповімо найближчим часом.";
 
-type Message = { message_id: number; chat: { id: number }; from?: { first_name?: string; last_name?: string; username?: string }; text?: string; caption?: string; photo?: unknown[] };
+type Message = {
+  message_id: number;
+  message_thread_id?: number;
+  is_topic_message?: boolean;
+  chat: { id: number; type?: string; is_forum?: boolean };
+  from?: { id?: number; is_bot?: boolean; first_name?: string; last_name?: string; username?: string };
+  text?: string;
+  caption?: string;
+  photo?: unknown[];
+};
 type Update = { message?: Message; callback_query?: { id: string; data?: string; from: { id: number }; message?: Message } };
 
 const sizeButtons = (id: number) => ({
@@ -111,6 +124,7 @@ const sizeButtons = (id: number) => ({
 });
 
 export async function handleShopUpdate(update: Update) {
+  if (update.message && update.message.chat.type !== "private") return handleGroupMessage(update.message);
   const cb = update.callback_query;
   const from = cb?.message?.chat.id ?? update.message?.chat.id;
   if (from) await kv().delete(silentKey(from));
@@ -128,11 +142,13 @@ export async function handleShopUpdate(update: Update) {
     if (m[1] === "ok") {
       await addComment(id, `Розмір підтверджено клієнтом у Telegram (${sizes})`);
       await shopBot("sendMessage", { chat_id: chat, text: "Дякуємо! Розмір підтверджено ✅\nНомер ТТН надішлемо сюди, щойно посилку відправимо." });
+      await note(chat, `✅ Клієнт підтвердив розмір ${sizes} (№${id})`);
       await telegram("sendMessage", { text: `✅ №${id}${order.buyer?.full_name ? ` · ${esc(order.buyer.full_name)}` : ""}: клієнт підтвердив розмір ${esc(sizes)} у Telegram.`, parse_mode: "HTML" });
     } else {
       await kv().put(awaitKey(chat), String(id), { expirationTtl: 60 * 60 * 24 * 3 });
       await shopBot("sendMessage", { chat_id: chat, text: "Напишіть, будь ласка, який розмір потрібен, або довжину стопи в сантиметрах — підберемо 🙌" });
       await expectAnswer(chat);
+      await note(chat, `🔄 Клієнт натиснув «Інший розмір» (№${id}), чекаємо, що напише`);
     }
     return;
   }
@@ -165,16 +181,27 @@ export async function handleShopUpdate(update: Update) {
         reply_markup: sizeButtons(id),
       });
       await expectAnswer(chat, id);
+      if (await groupId()) {
+        await topicFor(chat, topicTitle(msg, [id]));
+        await note(chat, `🛒 Клієнт відкрив бот із замовлення №${id}${name ? ` (${name})` : ""}. Запитали, чи вірний розмір.`);
+      }
       return;
     }
     await shopBot("sendMessage", { chat_id: chat, text: WELCOME, reply_markup: CATALOG });
     return;
   }
 
-  // Будь-яке інше повідомлення — Дронові в робочий бот. Відповідь «Відповісти» там піде клієнту.
+  // Будь-яке інше повідомлення — Дронові. Відповідь «Відповісти» в робочому боті або в темі групи піде клієнту.
   const orders = JSON.parse((await kv().get(chatKey(chat))) ?? "[]") as number[];
   const waitingSize = await kv().get(awaitKey(chat));
   const who = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(" ") + (msg.from?.username ? ` @${msg.from.username}` : "");
+  // Є група — повідомлення в тему клієнта; ні (або не вдалося) — як раніше, у робочий бот.
+  let delivered = false;
+  if (await groupId()) {
+    if (waitingSize) await note(chat, `🔄 №${waitingSize}: клієнт хоче інший розмір 👇`);
+    delivered = await copyToTopic(chat, msg, topicTitle(msg, orders));
+  }
+  if (!delivered) {
   const head = waitingSize
     ? `🔄 <b>№${waitingSize}: клієнт хоче інший розмір</b>`
     : `💬 <b>Питання від клієнта</b>${orders.length ? ` (замовлення ${orders.map((o) => `№${o}`).join(", ")})` : ""}`;
@@ -190,6 +217,7 @@ export async function handleShopUpdate(update: Update) {
   });
   const sent = (await res.json().catch(() => ({}))) as { result?: { message_id: number } };
   if (sent.result) await kv().put(relayKey(sent.result.message_id), String(chat), { expirationTtl: 60 * 60 * 24 * 30 });
+  }
   if (waitingSize) {
     await kv().delete(awaitKey(chat));
     await addComment(Number(waitingSize), `Клієнт у Telegram просить інший розмір: ${text.slice(0, 300)}`).catch(console.error);
@@ -217,7 +245,9 @@ export async function relayOwnerReply(replyToMessageId: number | undefined, text
 export async function notifyOrderChat(orderId: number, text: string) {
   const chat = await chatForOrder(orderId);
   if (!chat) return false;
-  return (await shopBot("sendMessage", { chat_id: chat, text, link_preview_options: { is_disabled: true } })).ok;
+  const ok = (await shopBot("sendMessage", { chat_id: chat, text, link_preview_options: { is_disabled: true } })).ok;
+  if (ok) await note(chat, `🤖 Бот надіслав клієнту:\n${text}`);
+  return ok;
 }
 
 export async function setupShopBot(origin: string) {
@@ -255,7 +285,82 @@ export async function remindSilent() {
           reply_markup: sizeButtons(w.order),
         })
       : await shopBot("sendMessage", { chat_id: chat, text: "Ви бачили наше повідомлення вище? 🙂 Напишіть, будь ласка, як вам зручно." });
-    if (res.ok) sent++;
+    if (res.ok) {
+      sent++;
+      await note(chat, "⏰ Клієнт мовчав 2 години, бот перепитав");
+    }
   }
   return sent;
+}
+
+// ——— Група з темами ———
+
+const groupId = async () => Number((await kv().get(GROUP_KEY)) ?? 0) || null;
+
+function topicTitle(msg: Message, orders: number[]) {
+  const who = [msg.from?.first_name, msg.from?.last_name].filter(Boolean).join(" ") || msg.from?.username || "Клієнт";
+  return `${who}${orders.length ? ` · №${orders.slice(-2).join(", №")}` : ""}`.slice(0, 120);
+}
+
+/** Тема клієнта в групі; створює, якщо ще немає. */
+async function topicFor(chat: number, title: string, fresh = false) {
+  const group = await groupId();
+  if (!group) return null;
+  const saved = fresh ? null : await kv().get(topicKey(chat));
+  if (saved) return Number(saved);
+  const t = await shopBot<{ message_thread_id: number }>("createForumTopic", { chat_id: group, name: title });
+  const thread = t.result?.message_thread_id;
+  if (!thread) return null;
+  await kv().put(topicKey(chat), String(thread), { expirationTtl: YEAR });
+  await kv().put(topicChatKey(thread), String(chat), { expirationTtl: YEAR });
+  return thread;
+}
+
+/** Повідомлення клієнта (текст, фото, голосове…) — в його тему. Якщо тему видалили, створює нову. */
+async function copyToTopic(chat: number, msg: Message, title: string) {
+  const group = await groupId();
+  for (const fresh of [false, true]) {
+    const thread = await topicFor(chat, title, fresh);
+    if (!group || !thread) return false;
+    const r = await shopBot("copyMessage", { chat_id: group, message_thread_id: thread, from_chat_id: chat, message_id: msg.message_id });
+    if (r.ok) return true;
+  }
+  return false;
+}
+
+/** Службова примітка в тему клієнта (лише якщо тема вже є). */
+async function note(chat: number, text: string) {
+  const group = await groupId();
+  const thread = group ? await kv().get(topicKey(chat)) : null;
+  if (!group || !thread) return;
+  await shopBot("sendMessage", { chat_id: group, message_thread_id: Number(thread), text, link_preview_options: { is_disabled: true } });
+}
+
+async function handleGroupMessage(msg: Message) {
+  const text = (msg.text ?? "").trim();
+  // /connect — підключити групу. Лише від Дрона (його Telegram id = чат робочого бота).
+  if (/^\/connect(@\w+)?$/.test(text)) {
+    if (String(msg.from?.id) !== String(process.env.TELEGRAM_CHAT_ID)) return;
+    if (!msg.chat.is_forum) {
+      await shopBot("sendMessage", { chat_id: msg.chat.id, text: "Увімкніть «Теми» в налаштуваннях групи і напишіть /connect ще раз." });
+      return;
+    }
+    await kv().put(GROUP_KEY, String(msg.chat.id));
+    await shopBot("sendMessage", {
+      chat_id: msg.chat.id,
+      message_thread_id: msg.message_thread_id,
+      text: "✅ Групу підключено. Кожен клієнт буде окремою темою. Пишіть у тему клієнта, і бот перешле йому (текст, фото, голосові).",
+    });
+    return;
+  }
+  if (msg.chat.id !== (await groupId()) || msg.from?.is_bot || !msg.is_topic_message || !msg.message_thread_id) return;
+  const chat = Number((await kv().get(topicChatKey(msg.message_thread_id))) ?? 0);
+  if (!chat) return;
+  const ok = (await shopBot("copyMessage", { chat_id: chat, from_chat_id: msg.chat.id, message_id: msg.message_id })).ok;
+  if (!ok) {
+    await shopBot("sendMessage", { chat_id: msg.chat.id, message_thread_id: msg.message_thread_id, text: "⚠️ Не доставлено: клієнт, мабуть, зупинив бот. Напишіть йому у Viber." });
+    return;
+  }
+  await kv().put(talkKey(chat), "1", { expirationTtl: TALK_TTL });
+  if ((msg.text ?? msg.caption ?? "").includes("?")) await expectAnswer(chat);
 }
