@@ -16,7 +16,7 @@ async function botSecret(env) {
 
 export default {
   // Раз на день (crons у wrangler.jsonc): бот нагадує про посилки, які клієнти не забирають.
-  // Кожні 15 хвилин (cron «*/15 * * * *»): бот для клієнтів сам надсилає ТТН тим, хто його підключив.
+  // Кожні 15 хвилин (cron «*/15 * * * *»): бот для клієнтів перепитує тих, хто мовчить 2+ години.
   async scheduled(event, env, ctx) {
     const path = event.cron === "*/15 * * * *" ? "/api/shop-bot/hourly" : "/api/telegram/daily";
     const req = new Request(`https://khoda.com.ua${path}`, {

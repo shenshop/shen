@@ -113,13 +113,13 @@ export async function handleTtnList(origin: string) {
   const list = all.filter((n) => !auto.has(n.id));
   if (!list.length) {
     return send(
-      `📮 Немає відправлених замовлень, яким ще не надіслали ТТН.\n\n` +
+      `📮 Немає замовлень з ТТН, яким ще не надіслали номер.\n\n` +
         `«Передано в доставку»: ${stats.inStatus}, з ТТН і телефоном: ${stats.withTtn}, ` +
         `без тегу «ТТН надіслано»: ${stats.notSent}, за ${4} дні: ${stats.recent}` +
         (stats.inStatus && !stats.withTtn ? `\n${esc(stats.sample)}` : ""),
     );
   }
-  await send(`📮 <b>Відправлені, клієнтам ще не надіслано ТТН: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
+  await send(`📮 <b>З ТТН, клієнтам ще не надіслано: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
   for (const n of list) {
     await send(`<b>№${n.id}</b>${n.buyer ? ` · ${esc(n.buyer)}` : ""} · ${esc(n.phone)}\n\n<code>${esc(customerText(n))}</code>`, {
       link_preview_options: { is_disabled: true },
