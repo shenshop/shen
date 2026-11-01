@@ -6,7 +6,7 @@ import { remindSilent } from "@/lib/shop-bot";
 
 export const dynamic = "force-dynamic";
 
-// Щогодини (cron у worker.js): клієнтам, які підключили бот, бот сам надсилає ТТН.
+// Кожні 15 хвилин (cron у worker.js): клієнтам, які підключили бот, бот сам надсилає ТТН.
 export async function POST(req: Request) {
   if (req.headers.get("x-telegram-bot-api-secret-token") !== (await webhookSecret())) {
     return NextResponse.json({ ok: false }, { status: 401 });
