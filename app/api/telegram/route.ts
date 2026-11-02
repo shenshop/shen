@@ -117,6 +117,12 @@ export async function POST(req: Request) {
       else if (looksLikeOrder(text)) await handleManualPreview(text, update.message!.message_id);
       else if (text === PICKUP_BUTTON || text.startsWith("/nezabraly")) await handlePickups(new URL(req.url).origin);
       else if (text === REFRESH_BUTTON || text.startsWith("/refresh")) await handleRefresh();
+      // Схоже на замовлення, але телефон не впізнано: не мовчимо.
+      else if (text.split("\n").length >= 2 || /\d{5,}/.test(text)) {
+        await telegram("sendMessage", {
+          text: "🤔 Не зрозумів. Якщо це замовлення, перевірте телефон (напр. 0671234567) і напишіть: імʼя, телефон, місто з відділенням або індекс Укрпошти, модель і розмір.",
+        });
+      }
     }
   } catch (e) {
     console.error(e);
