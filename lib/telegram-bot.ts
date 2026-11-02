@@ -56,6 +56,7 @@ const send = (text: string, extra: object = {}) =>
   telegram("sendMessage", { text: text.slice(0, 4000), parse_mode: "HTML", ...extra });
 
 export async function handleCheck() {
+  await send("⏳ Перевіряю склад у KeyCRM, це може зайняти до хвилини…");
   const plan = await buildPlan();
   const lines = [`<b>Склад «Основний», замовлення «Виготовляється» і «Чекаєм поставку»</b>`, ""];
   if (plan.ready.length) {
@@ -114,6 +115,7 @@ export async function handleMove() {
 // Кожне відправлене замовлення окремим повідомленням: текст для клієнта (торкнутися, щоб скопіювати),
 // кнопка відкрити чат у Viber і кнопка «Надіслано», яка ставить тег у KeyCRM.
 export async function handleTtnList(origin: string) {
+  await send("⏳ Шукаю ТТН у KeyCRM, це може зайняти до хвилини…");
   const all = await ordersToNotify();
   // Тим, хто підключив бот для клієнтів, ТТН іде туди автоматично; у списку лишаються решта.
   const auto = new Set(await autoSendTtns(all));
