@@ -68,6 +68,13 @@ export async function handleCheck() {
       ...plan.readyOther.map((o) => `${line(o)} · ${esc(o.service)}`),
     );
   }
+  if (plan.badWarehouse.length) {
+    lines.push(
+      "",
+      `⚠️ <b>Товар є, але не переводжу: перевірте склад у замовленні (${plan.badWarehouse.length}):</b>`,
+      ...plan.badWarehouse.map((o) => `${line(o)} · ${esc(o.problem ?? "")}`),
+    );
+  }
   if (plan.waiting.length) {
     const groups = needSummary(plan.waiting);
     const pairs = groups.reduce((sum, g) => sum + g.total, 0);
