@@ -31,10 +31,14 @@ function parseTime(v?: string) {
 
 export type TtnNotice = { id: number; buyer: string; phone: string; ttn: string; nova: boolean };
 
+// Id тегу не змінюється: запамʼятовуємо, щоб кожне «✅ Надіслано» коштувало 1 запит до KeyCRM, а не 2.
+let cachedTagId: number | null = null;
 async function sentTagId() {
+  if (cachedTagId) return cachedTagId;
   const tags = rows(await request<List<Named>>("/order/tag?limit=50", fresh));
   const id = tags.find((t) => norm(t.name) === SENT_TAG)?.id;
   if (!id) throw new Error("У KeyCRM немає тегу «ТТН надіслано». Створіть його в налаштуваннях тегів замовлень.");
+  cachedTagId = id;
   return id;
 }
 
