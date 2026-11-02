@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { telegram } from "@/lib/telegram";
+import { seenUpdate } from "@/lib/tg-dedupe";
 import { markRefusalDone } from "@/lib/refusals";
 import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
@@ -10,6 +11,7 @@ import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManual
 export const dynamic = "force-dynamic";
 
 type Update = {
+  update_id?: number;
   message?: {
     message_id: number;
     chat: { id: number };
@@ -36,6 +38,7 @@ export async function POST(req: Request) {
   const chatId = String(update.message?.chat.id ?? update.callback_query?.message?.chat.id ?? "");
   // Відповідаємо лише власнику магазину.
   if (chatId !== owner) return NextResponse.json({ ok: true });
+  if (await seenUpdate("owner", update.update_id).catch(() => false)) return NextResponse.json({ ok: true });
 
   try {
     const cb = update.callback_query;
