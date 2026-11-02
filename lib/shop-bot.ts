@@ -254,6 +254,7 @@ export async function relayOwnerReply(replyToMessageId: number | undefined, text
   if (ok) await kv().put(talkKey(Number(chat)), "1", { expirationTtl: TALK_TTL });
   // Перепитуємо лише якщо Дрон щось запитав, а не на «Дякуємо, гарного дня».
   if (ok && text.includes("?")) await expectAnswer(Number(chat));
+  else if (ok) await kv().delete(silentKey(Number(chat)));
   await telegram("sendMessage", { text: ok ? "✉️ Надіслано клієнту в Telegram." : "⚠️ Не вдалося надіслати: клієнт, мабуть, зупинив бот. Напишіть йому у Viber." });
   return true;
 }
@@ -263,7 +264,11 @@ export async function notifyOrderChat(orderId: number, text: string) {
   const chat = await chatForOrder(orderId);
   if (!chat) return false;
   const ok = (await shopBot("sendMessage", { chat_id: chat, text, link_preview_options: { is_disabled: true } })).ok;
-  if (ok) await note(chat, `🤖 Бот надіслав клієнту:\n${text}`);
+  if (ok) {
+    // Після ТТН більше нічого не перепитуємо.
+    await kv().delete(silentKey(chat));
+    await note(chat, `🤖 Бот надіслав клієнту:\n${text}`);
+  }
   return ok;
 }
 
@@ -379,5 +384,7 @@ async function handleGroupMessage(msg: Message) {
     return;
   }
   await kv().put(talkKey(chat), "1", { expirationTtl: TALK_TTL });
+  // Нове питання — чекаємо відповіді; будь-що інше (ТТН, «дякуємо») скасовує нагадування.
   if ((msg.text ?? msg.caption ?? "").includes("?")) await expectAnswer(chat);
+  else await kv().delete(silentKey(chat));
 }
