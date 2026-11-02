@@ -8,7 +8,7 @@ import { request } from "./keycrm";
 const FROM_STATUS = "виготовляється";
 const ALSO_FROM_STATUS = "чекаєм поставку"; // перевіряємо разом, якщо такий статус є
 const TO_STATUS = "готово до відгрузки";
-const WAREHOUSE = "основний";
+const WAREHOUSE = /основн/;
 // KeyCRM дозволяє 20 запитів на хвилину, тож за одне натискання переводимо не більше стількох.
 export const MAX_MOVES = 10;
 
@@ -90,9 +90,11 @@ export async function buildPlan(): Promise<Plan> {
     const ids = offerIds.slice(i, i + 50).join(",");
     const res = await request<List<KStock>>(`/offers/stocks?filter[details]=true&filter[offers_id]=${ids}&limit=50`, fresh);
     for (const s of rows(res)) {
-      const wh = s.warehouse?.find((w) => norm(w.name) === WAREHOUSE);
-      const left = wh ? wh.quantity - wh.reserve : s.quantity - s.reserve;
-      free.set(s.id, Math.max(0, left));
+      // Лише склад «Основний» («Основний склад» теж). Немає його в залишках — вважаємо, що товару нема,
+      // а не беремо загальний залишок з усіх складів. Мінус або 0 — теж нема.
+      const wh = s.warehouse?.find((w) => WAREHOUSE.test(norm(w.name)));
+      const left = wh ? Number(wh.quantity) - Number(wh.reserve || 0) : 0;
+      free.set(s.id, Number.isFinite(left) ? Math.max(0, left) : 0);
     }
   }
 
