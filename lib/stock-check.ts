@@ -8,6 +8,8 @@ import { request } from "./keycrm";
 const FROM_STATUS = "виготовляється";
 const ALSO_FROM_STATUS = "чекаєм поставку"; // перевіряємо разом, якщо такий статус є
 const TO_STATUS = "готово до відгрузки";
+// «Новий»: розмір ще не уточнено, тож товар їм дістається після «Виготовляється» і бот питає, що робити.
+const NEW_STATUS = /^нов(ий|е|і)$/;
 const WAREHOUSE = /основн/;
 // KeyCRM дозволяє 20 запитів на хвилину, тож за одне натискання переводимо не більше стількох.
 export const MAX_MOVES = 10;
@@ -42,7 +44,7 @@ const fresh = { cache: "no-store" as const };
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
 export type Line = { sku: string; qty: number };
-export type PlannedOrder = { id: number; buyer: string; lines: Line[]; service: string; awaitingDelivery: boolean; problem?: string };
+export type PlannedOrder = { id: number; buyer: string; lines: Line[]; service: string; awaitingDelivery: boolean; problem?: string; np?: boolean };
 export type Plan = {
   fromIds: number[];
   toId: number;
@@ -51,6 +53,10 @@ export type Plan = {
   waiting: PlannedOrder[];
   // Товар на «Основному» є, але в самому замовленні не вибрано склад або вибрано інший: не переводимо, пишемо Дронові.
   badWarehouse: PlannedOrder[];
+  // Статус «Новий»: товар є — питаємо Дрона по кожному; товару нема — лише кількість.
+  newReady: PlannedOrder[];
+  newWaiting: number;
+  hasNewStatus: boolean;
 };
 
 // Усі служби доставки Нової Пошти в KeyCRM («НП» від сайту, «Нова Пошта» з інтеграції тощо).
@@ -67,24 +73,28 @@ async function statusIds() {
   const fromId = find(FROM_STATUS);
   const alsoId = find(ALSO_FROM_STATUS);
   const toId = find(TO_STATUS);
+  const newId = list.find((s) => NEW_STATUS.test(norm(s.name)))?.id;
   if (!fromId || !toId) throw new Error(`У KeyCRM не знайдено статус «Виготовляється» або «Готово до відгрузки»`);
-  return { fromIds: alsoId ? [fromId, alsoId] : [fromId], alsoId, toId };
+  return { fromIds: alsoId ? [fromId, alsoId] : [fromId], alsoId, toId, newId };
 }
 
 export async function buildPlan(): Promise<Plan> {
-  const { fromIds, alsoId, toId } = await statusIds();
+  const { fromIds, alsoId, toId, newId } = await statusIds();
+  const queryIds = newId ? [...fromIds, newId] : fromIds;
   const { npIds, names } = await deliveryServices();
 
   const orders: KOrder[] = [];
   for (let page = 1; page <= 4; page++) {
     const res = await request<List<KOrder>>(
-      `/order?filter[status_id]=${fromIds.join(",")}&include=products.offer,shipping.deliveryService,buyer&sort=id&limit=50&page=${page}`,
+      `/order?filter[status_id]=${queryIds.join(",")}&include=products.offer,shipping.deliveryService,buyer&sort=id&limit=50&page=${page}`,
       fresh,
     );
     orders.push(...rows(res));
     if (Array.isArray(res) || !res.next_page_url) break;
   }
-  orders.sort((a, b) => a.id - b.id);
+  // Спершу «Виготовляється» і «Чекаєм поставку» (від найстаршого), потім «Нові».
+  const isNew = (o: KOrder) => newId !== undefined && o.status_id === newId;
+  orders.sort((a, b) => Number(isNew(a)) - Number(isNew(b)) || a.id - b.id);
 
   // Скільки кожного варіанту вільно на складі «Основний» (залишок мінус резерв).
   const offerIds = [...new Set(orders.flatMap((o) => (o.products ?? []).map((p) => p.offer?.id).filter(Boolean)))];
@@ -105,6 +115,8 @@ export async function buildPlan(): Promise<Plan> {
   const readyOther: PlannedOrder[] = [];
   const waiting: PlannedOrder[] = [];
   const badWarehouse: PlannedOrder[] = [];
+  const newReady: PlannedOrder[] = [];
+  let newWaiting = 0;
   for (const o of orders) {
     const serviceId = o.shipping?.delivery_service_id ?? -1;
     const products = o.products ?? [];
@@ -120,7 +132,8 @@ export async function buildPlan(): Promise<Plan> {
     }
     const enough = known && [...need].every(([id, q]) => (free.get(id) ?? 0) >= q);
     if (!enough) {
-      waiting.push(entry);
+      if (isNew(o)) newWaiting++;
+      else waiting.push(entry);
       continue;
     }
     // Склад у позиціях замовлення: KeyCRM списує саме з нього. Якщо не «Основний» — не переводимо.
@@ -130,9 +143,10 @@ export async function buildPlan(): Promise<Plan> {
       continue;
     }
     for (const [id, q] of need) free.set(id, (free.get(id) ?? 0) - q);
-    (npIds.has(serviceId) ? ready : readyOther).push(entry);
+    if (isNew(o)) newReady.push({ ...entry, np: npIds.has(serviceId) });
+    else (npIds.has(serviceId) ? ready : readyOther).push(entry);
   }
-  return { fromIds, toId, ready, readyOther, waiting, badWarehouse };
+  return { fromIds, toId, ready, readyOther, waiting, badWarehouse, newReady, newWaiting, hasNewStatus: newId !== undefined };
 }
 
 export async function moveOrders(plan: Plan) {
@@ -160,4 +174,13 @@ function warehouseProblem(products: KOrderProduct[]) {
     if (name && !WAREHOUSE.test(norm(name))) return `вибрано склад «${name}», а не «Основний» (${p.offer?.sku || p.name || "товар"})`;
   }
   return "";
+}
+
+/** Переводить одне «Нове» замовлення в «Готово до відгрузки», якщо для нього досі є товар. */
+export async function moveNewOrder(id: number) {
+  const plan = await buildPlan();
+  const o = plan.newReady.find((x) => x.id === id);
+  if (!o) return { ok: false as const, reason: "для нього вже немає вільного товару на «Основному» або змінився статус" };
+  await request(`/order/${id}`, { method: "PUT", body: JSON.stringify({ status_id: plan.toId }), ...fresh });
+  return { ok: true as const, order: o };
 }

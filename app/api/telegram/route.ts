@@ -6,7 +6,7 @@ import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
 import { relayOwnerReply } from "@/lib/shop-bot";
 import { looksLikeProduct, photoUpdateSku, rememberPhoto } from "@/lib/new-product";
-import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +86,9 @@ export async function POST(req: Request) {
         if (original) await handlePhotoReplace(original, mkphoto[1], new URL(req.url).origin, cb.message?.reply_to_message?.message_id, mkphoto[2] ? Number(mkphoto[2]) : undefined);
         else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного альбому. Надішліть його ще раз." });
       }
+      const newmv = cb.data?.match(/^newmv:(\d+)$/);
+      if (newmv) await handleMoveNew(Number(newmv[1]));
+      if (cb.data === "newskip") await telegram("sendMessage", { text: "Добре, залишаю як є." });
       if (cb.data === "move") await handleMove();
       else if (cb.data === "cancel") await telegram("sendMessage", { text: "Добре, нічого не змінюю." });
     } else if (update.message?.photo?.length) {

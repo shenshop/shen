@@ -1,7 +1,7 @@
 import "server-only";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { esc, telegram } from "./telegram";
-import { buildPlan, MAX_MOVES, moveOrders, type PlannedOrder } from "./stock-check";
+import { buildPlan, MAX_MOVES, moveNewOrder, moveOrders, type PlannedOrder } from "./stock-check";
 import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./ttn-notify";
 import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
@@ -58,7 +58,7 @@ const send = (text: string, extra: object = {}) =>
 export async function handleCheck() {
   await send("⏳ Перевіряю склад у KeyCRM, це може зайняти до хвилини…");
   const plan = await buildPlan();
-  const lines = [`<b>Склад «Основний», замовлення «Виготовляється» і «Чекаєм поставку»</b>`, ""];
+  const lines = [`<b>Склад «Основний», замовлення «Виготовляється»${plan.hasNewStatus ? ", «Чекаєм поставку» і «Новий»" : " і «Чекаєм поставку»"}</b>`, ""];
   if (plan.ready.length) {
     lines.push(`✅ <b>Товар є, Нова Пошта, можна в «Готово до відгрузки» (${plan.ready.length}):</b>`, ...plan.ready.map(line));
   } else lines.push("✅ Поки немає замовлень з Новою Поштою, для яких є товар на складі.");
@@ -84,6 +84,8 @@ export async function handleCheck() {
       lines.push(`<b>${esc(g.model)}</b>: ${g.sizes.map(([size, n]) => `${esc(size)} — ${n}`).join(", ")}${g.sizes.length > 1 ? ` (разом ${g.total})` : ""}`);
     }
   }
+  if (plan.newReady.length) lines.push("", `🆕 <b>Нові замовлення, для яких є товар (${plan.newReady.length}):</b> нижче окремо, з кнопками.`);
+  if (plan.newWaiting) lines.push("", `🆕 Нових замовлень без товару: ${plan.newWaiting} (у «Треба замовити» не рахую, поки розмір не уточнено).`);
   const n = Math.min(plan.ready.length, MAX_MOVES);
   await send(
     lines.join("\n"),
@@ -98,6 +100,30 @@ export async function handleCheck() {
         }
       : {},
   );
+  await handleCheckNew(plan.newReady);
+}
+
+export async function handleCheckNew(newReady: PlannedOrder[]) {
+  // Кожне нове замовлення з товаром — окремим повідомленням, щоб вирішити по кожному.
+  for (const o of newReady.slice(0, 10)) {
+    const head = `🆕 <b>Нове замовлення ${line(o)}</b>\nТовар є на «Основному». ${esc(o.service)}.${o.problem ? `\n⚠️ ${esc(o.problem)}` : ""}\nЩо робимо?`;
+    await send(head, {
+      reply_markup: {
+        inline_keyboard: [
+          o.np && !o.problem
+            ? [{ text: "✅ В «Готово до відгрузки»", callback_data: `newmv:${o.id}` }, { text: "⏸ Залишити «Новий»", callback_data: "newskip" }]
+            : [{ text: "Зрозуміло, переведу вручну", callback_data: "newskip" }],
+        ],
+      },
+    });
+  }
+  if (newReady.length > 10) await send(`…і ще ${newReady.length - 10} нових з товаром. Натисніть «${CHECK_BUTTON}» ще раз пізніше.`);
+}
+
+export async function handleMoveNew(id: number) {
+  const r = await moveNewOrder(id);
+  if (r.ok) await send(`✅ №${id} переведено в «Готово до відгрузки».`);
+  else await send(`⚠️ №${id} не переведено: ${esc(r.reason)}.`);
 }
 
 export async function handleMove() {
