@@ -9,7 +9,7 @@ const FROM_STATUS = "виготовляється";
 const ALSO_FROM_STATUS = "чекаєм поставку"; // перевіряємо разом, якщо такий статус є
 const TO_STATUS = "готово до відгрузки";
 // «Новий»: розмір ще не уточнено, тож товар їм дістається після «Виготовляється» і бот питає, що робити.
-const NEW_STATUS = /^нов(ий|е|і)$/;
+const NEW_STATUS = /^нов/;
 const WAREHOUSE = /основн/;
 // KeyCRM дозволяє 20 запитів на хвилину, тож за одне натискання переводимо не більше стількох.
 export const MAX_MOVES = 10;
@@ -73,7 +73,10 @@ async function statusIds() {
   const fromId = find(FROM_STATUS);
   const alsoId = find(ALSO_FROM_STATUS);
   const toId = find(TO_STATUS);
-  const newId = list.find((s) => NEW_STATUS.test(norm(s.name)))?.id;
+  // «Новий» у KeyCRM — системний статус з id 1 (alias «new»); назва в API може відрізнятись від інтерфейсу.
+  type KStatusFull = KStatus & { alias?: string };
+  const newId =
+    (list as KStatusFull[]).find((s) => s.alias === "new" || NEW_STATUS.test(norm(s.name)))?.id ?? (list.some((s) => s.id === 1) ? 1 : undefined);
   if (!fromId || !toId) throw new Error(`У KeyCRM не знайдено статус «Виготовляється» або «Готово до відгрузки»`);
   return { fromIds: alsoId ? [fromId, alsoId] : [fromId], alsoId, toId, newId };
 }
