@@ -6,7 +6,7 @@ import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
 import { relayOwnerReply } from "@/lib/shop-bot";
 import { looksLikeProduct, photoUpdateSku, rememberPhoto } from "@/lib/new-product";
-import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { CHECK_BUTTON, handleCheck, handleMove, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -113,7 +113,10 @@ export async function POST(req: Request) {
         await handleReasonText(Number(reasonFor[1]), text);
         return NextResponse.json({ ok: true });
       }
-      if (text === CHECK_BUTTON || text.startsWith("/sklad") || text.startsWith("/start")) await handleCheck();
+      // /start лише повертає кнопки внизу чату (якщо чат очистили або кнопки згорнулись).
+      if (text.startsWith("/start") || text.startsWith("/knopky")) {
+        await telegram("sendMessage", { text: "Кнопки повернув 👇", reply_markup: KEYBOARD });
+      } else if (text === CHECK_BUTTON || text.startsWith("/sklad")) await handleCheck();
       else if (text === TTN_BUTTON || text.startsWith("/ttn")) await handleTtnList(new URL(req.url).origin);
       else if (text === REFUSALS_BUTTON || text.startsWith("/vidmovy")) await handleRefusals(new URL(req.url).origin);
       else if (looksLikeProduct(text)) await handleProductPreview(text, update.message!.message_id, null);

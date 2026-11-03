@@ -21,6 +21,7 @@ export async function GET(req: Request) {
       { command: "vidmovy", description: "Відмови від отримання" },
       { command: "nezabraly", description: "Посилки, які не забрали" },
       { command: "refresh", description: "Оновити сайт з KeyCRM" },
+      { command: "start", description: "Повернути кнопки" },
     ],
   });
   const keyboard = await telegram("sendMessage", {
