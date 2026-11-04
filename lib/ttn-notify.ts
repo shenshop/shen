@@ -7,7 +7,7 @@ import { request } from "./keycrm";
 // «Передано в доставку» (8) і «У дорозі» (9): у обох посилка вже з ТТН.
 const SHIPPED_STATUS_IDS = [8, 9];
 const SENT_TAG = "ттн надіслано";
-const RECENT_DAYS = 14;
+const RECENT_DAYS = 4;
 
 type Named = { id: number; name: string };
 type KOrder = {
@@ -46,7 +46,7 @@ async function sentTagId() {
 
 export async function ordersToNotify(): Promise<TtnNotice[]> {
   // «Передано в доставку» у KeyCRM — статус №8 (за назвою шукати не можна: є схожі назви).
-  // Замовлення, створені за останні 14 днів, з ТТН і без тегу «ТТН надіслано» (Дрон, 2026-11-04).
+  // Замовлення, які змінювались за останні 4 дні (передали в доставку, поїхали), з ТТН і без тегу «ТТН надіслано» (Дрон, 2026-11-04).
   const tagId = await sentTagId();
   const services = rows(await request<List<Named>>("/order/delivery-service?limit=50", fresh));
   const novaIds = new Set(services.filter((s) => /^нп$|нова\s*пошта/i.test(s.name.trim())).map((s) => s.id));
@@ -64,7 +64,7 @@ export async function ordersToNotify(): Promise<TtnNotice[]> {
   const notSent = withTtn.filter((o) => !(o.tags ?? []).some((t) => t.id === tagId));
   const since = Date.now() - RECENT_DAYS * 86400_000;
   const recent = notSent.filter((o) => {
-    const t = parseTime(o.created_at ?? o.updated_at);
+    const t = parseTime(o.updated_at ?? o.created_at);
     return Number.isNaN(t) || t >= since;
   });
   // Коли список порожній, пояснюємо чому: так легше помітити, якщо KeyCRM віддає дані інакше.

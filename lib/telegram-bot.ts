@@ -150,7 +150,7 @@ export async function handleTtnList(origin: string) {
     return send(
       `📮 Немає замовлень з ТТН, яким ще не надіслали номер.\n\n` +
         `«Передано в доставку» і «У дорозі»: ${stats.inStatus}, з ТТН і телефоном: ${stats.withTtn}, ` +
-        `без тегу «ТТН надіслано»: ${stats.notSent}, створені за 14 днів: ${stats.recent}` +
+        `без тегу «ТТН надіслано»: ${stats.notSent}, за останні 4 дні: ${stats.recent}` +
         (stats.inStatus && !stats.withTtn ? `\n${esc(stats.sample)}` : ""),
     );
   }
