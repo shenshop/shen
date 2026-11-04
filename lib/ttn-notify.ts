@@ -4,14 +4,16 @@ import { request } from "./keycrm";
 // Відправлені замовлення, клієнтам яких ще не написали номер ТТН.
 // «Надіслано» позначаємо тегом у KeyCRM, тож список не повторюється.
 
-const SHIPPED_STATUS_ID = 8;
+// «Передано в доставку» (8) і «У дорозі» (9): у обох посилка вже з ТТН.
+const SHIPPED_STATUS_IDS = [8, 9];
 const SENT_TAG = "ттн надіслано";
-const RECENT_DAYS = 4;
+const RECENT_DAYS = 14;
 
 type Named = { id: number; name: string };
 type KOrder = {
   id: number;
   updated_at?: string;
+  created_at?: string;
   buyer?: { full_name?: string; phone?: string } | null;
   shipping?: { delivery_service_id?: number | null; tracking_code?: string | null } | null;
   tags?: Named[] | null;
@@ -44,22 +46,25 @@ async function sentTagId() {
 
 export async function ordersToNotify(): Promise<TtnNotice[]> {
   // «Передано в доставку» у KeyCRM — статус №8 (за назвою шукати не можна: є схожі назви).
-  const shippedId = SHIPPED_STATUS_ID;
+  // Замовлення, створені за останні 14 днів, з ТТН і без тегу «ТТН надіслано» (Дрон, 2026-11-04).
   const tagId = await sentTagId();
   const services = rows(await request<List<Named>>("/order/delivery-service?limit=50", fresh));
   const novaIds = new Set(services.filter((s) => /^нп$|нова\s*пошта/i.test(s.name.trim())).map((s) => s.id));
 
-  const orders = rows(
-    await request<List<KOrder>>(
-      `/order?filter[status_id]=${shippedId}&include=buyer,shipping.deliveryService,tags&sort=-id&limit=50`,
+  const orders: KOrder[] = [];
+  for (let page = 1; page <= 3; page++) {
+    const res = await request<List<KOrder> & { next_page_url?: string | null }>(
+      `/order?filter[status_id]=${SHIPPED_STATUS_IDS.join(",")}&include=buyer,shipping.deliveryService,tags&sort=-id&limit=50&page=${page}`,
       fresh,
-    ),
-  );
-  const since = Date.now() - RECENT_DAYS * 86400_000;
+    );
+    orders.push(...rows(res));
+    if (Array.isArray(res) || !res.next_page_url) break;
+  }
   const withTtn = orders.filter((o) => o.shipping?.tracking_code && o.buyer?.phone);
   const notSent = withTtn.filter((o) => !(o.tags ?? []).some((t) => t.id === tagId));
+  const since = Date.now() - RECENT_DAYS * 86400_000;
   const recent = notSent.filter((o) => {
-    const t = parseTime(o.updated_at);
+    const t = parseTime(o.created_at ?? o.updated_at);
     return Number.isNaN(t) || t >= since;
   });
   // Коли список порожній, пояснюємо чому: так легше помітити, якщо KeyCRM віддає дані інакше.

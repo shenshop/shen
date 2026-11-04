@@ -149,13 +149,17 @@ export async function handleTtnList(origin: string) {
   if (!list.length) {
     return send(
       `📮 Немає замовлень з ТТН, яким ще не надіслали номер.\n\n` +
-        `«Передано в доставку»: ${stats.inStatus}, з ТТН і телефоном: ${stats.withTtn}, ` +
-        `без тегу «ТТН надіслано»: ${stats.notSent}, за ${4} дні: ${stats.recent}` +
+        `«Передано в доставку» і «У дорозі»: ${stats.inStatus}, з ТТН і телефоном: ${stats.withTtn}, ` +
+        `без тегу «ТТН надіслано»: ${stats.notSent}, створені за 14 днів: ${stats.recent}` +
         (stats.inStatus && !stats.withTtn ? `\n${esc(stats.sample)}` : ""),
     );
   }
-  await send(`📮 <b>З ТТН, клієнтам ще не надіслано: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
-  for (const n of list) {
+  const MAX = 30;
+  await send(
+    `📮 <b>З ТТН, клієнтам ще не надіслано: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.` +
+      (list.length > MAX ? `\nПоказую перші ${MAX}; після «✅ Надіслано» натисніть кнопку ще раз, щоб побачити решту.` : ""),
+  );
+  for (const n of list.slice(0, MAX)) {
     await send(`<b>№${n.id}</b>${n.buyer ? ` · ${esc(n.buyer)}` : ""} · ${esc(n.phone)}\n\n<code>${esc(customerText(n))}</code>`, {
       link_preview_options: { is_disabled: true },
       reply_markup: {
