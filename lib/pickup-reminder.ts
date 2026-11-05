@@ -1,4 +1,5 @@
 import "server-only";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { request } from "./keycrm";
 
 // Посилки Нової Пошти і Укрпошти, які лежать у відділенні вже 3-й день, а клієнт їх не забрав.
@@ -9,6 +10,11 @@ import { request } from "./keycrm";
 const ARRIVED_STATUS = /прибул|прибув/i;
 const DONE_TAG = "нагадали забрати";
 const DAYS_WAITING = 2; // день прибуття — 1-й, отже на 3-й день минуло 2 дні
+// Друге нагадування на 5-й день (останній день безкоштовного зберігання НП), навіть якщо вже нагадали.
+const FINAL_DAY = 5;
+type KV = { get(k: string): Promise<string | null>; put(k: string, v: string, o?: { expirationTtl?: number }): Promise<void> };
+const kv = () => (getCloudflareContext().env as unknown as { NEXT_INC_CACHE_KV: KV }).NEXT_INC_CACHE_KV;
+const finalKey = (id: number) => `pickup:final:${id}`;
 const ARRIVED = new Set(["7", "8"]); // 7 — прибув у відділення, 8 — у поштомат
 
 type Named = { id: number; name: string };
@@ -26,7 +32,7 @@ const rows = <T>(r: List<T>) => (Array.isArray(r) ? r : r.data);
 const fresh = { cache: "no-store" as const };
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
-export type Pickup = { id: number; buyer: string; phone: string; ttn: string; point: string; days: number; storageFrom: string; ukr?: boolean };
+export type Pickup = { id: number; buyer: string; phone: string; ttn: string; point: string; days: number; storageFrom: string; ukr?: boolean; final?: boolean };
 
 // Час у KeyCRM в UTC: «2026-10-28 21:15:00» або ISO.
 const parseUtc = (v: string) => Date.parse(/[TZ+]/.test(v) ? v : v.replace(" ", "T") + "Z");
@@ -79,7 +85,8 @@ export async function pickupsWaiting(): Promise<Pickup[]> {
     orders.push(...res.data);
     if (!res.next_page_url) break;
   }
-  const open = orders.filter((o) => o.buyer?.phone && o.shipping?.tracking_code?.trim() && !(o.tags ?? []).some((t) => t.id === tagId));
+  const open = orders.filter((o) => o.buyer?.phone && o.shipping?.tracking_code?.trim());
+  const tagged = new Set(open.filter((o) => (o.tags ?? []).some((t) => t.id === tagId)).map((o) => o.id));
   const today = kyivDay(Date.now());
   const ukr: Pickup[] = open
     .filter((o) => ukrIds.has(o.shipping?.delivery_service_id ?? -1))
@@ -101,7 +108,7 @@ export async function pickupsWaiting(): Promise<Pickup[]> {
       }];
     });
   const candidates = open.filter((o) => /^\d{14}$/.test(o.shipping!.tracking_code!.trim()) && !ukrIds.has(o.shipping?.delivery_service_id ?? -1));
-  if (!candidates.length) return ukr.sort((a, b) => a.id - b.id);
+  if (!candidates.length) return due(ukr, tagged);
   const byTtn = new Map((await npStatuses(candidates.map((o) => o.shipping!.tracking_code!.trim()))).map((s) => [s.Number, s]));
   const np: Pickup[] = candidates
     .flatMap((o) => {
@@ -122,15 +129,33 @@ export async function pickupsWaiting(): Promise<Pickup[]> {
         storageFrom: s.DatePayedKeeping?.slice(0, 10) ?? "",
       }];
     });
-  return [...np, ...ukr].sort((a, b) => a.id - b.id);
+  return due([...np, ...ukr], tagged);
 }
 
-export async function markReminded(orderId: number) {
-  await request(`/order/${orderId}/tag/${await doneTagId()}`, { method: "POST", ...fresh });
+// Перше нагадування — з 3-го дня, якщо ще не нагадували (тег). Друге — з 5-го дня, один раз (позначка в KV).
+async function due(list: Pickup[], tagged: Set<number>) {
+  const out: Pickup[] = [];
+  for (const p of list.sort((a, b) => a.id - b.id)) {
+    if (!tagged.has(p.id)) out.push(p.days >= FINAL_DAY ? { ...p, final: true } : p);
+    else if (p.days >= FINAL_DAY && !(await kv().get(finalKey(p.id)))) out.push({ ...p, final: true });
+  }
+  return out;
+}
+
+export async function markReminded(orderId: number, final = false) {
+  // Позначку 5-го дня ставимо завжди, коли нагадали на 5-й день і пізніше, щоб не нагадувати вдруге.
+  if (final) await kv().put(finalKey(orderId), "1", { expirationTtl: 60 * 60 * 24 * 30 });
+  const tag = request(`/order/${orderId}/tag/${await doneTagId()}`, { method: "POST", ...fresh });
+  // На 5-й день тег зазвичай уже стоїть: повторне додавання може дати помилку, вона не важлива.
+  await (final ? tag.catch(() => null) : tag);
 }
 
 // Текст Дрона (31.10.2026); день рахуємо сам: на 3-й день — «3-й день», на 4-й — «4-й день».
 export const pickupText = (p: Pickup) =>
-  p.ukr
+  p.final
+    ? p.ukr
+      ? `Ваше замовлення чекає у відділенні Укрпошти вже ${p.days}-й день! 📦\nБудь ласка, заберіть його якнайшвидше, щоб посилку не повернули. Чекаємо на вас!`
+      : `Ваше замовлення чекає у відділенні Нової Пошти вже ${p.days}-й день! 📦\n${p.days === FINAL_DAY ? "Сьогодні останній день безкоштовного зберігання" : "Безкоштовне зберігання вже закінчилось"}, далі Нова Пошта бере плату за зберігання.\nБудь ласка, заберіть посилку якнайшвидше. Чекаємо на вас!`
+    : p.ukr
     ? `Ваше замовлення вже чекає у відділенні Укрпошти! 📦\n${p.days}-й день\nБудь ласка, заберіть його найближчим часом. Чекаємо на вас!`
     : `Ваше замовлення вже чекає у відділенні Нової Пошти! 📦\n${p.days}-й день\nБудь ласка, заберіть його найближчим часом.\nЗверніть увагу, що Нова Пошта зменшила термін безкоштовного зберігання до 5 днів. Чекаємо на вас!`;

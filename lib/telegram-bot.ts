@@ -204,12 +204,12 @@ export async function handlePickups(origin: string, quiet = false) {
   await send(`📬 <b>Посилки чекають у відділенні, клієнт не забрав: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
   for (const p of list) {
     await send(
-      `<b>№${p.id}</b>${p.buyer ? ` · ${esc(p.buyer)}` : ""} · ${p.days}-й день у відділенні${p.ukr ? " Укрпошти (з дня зміни статусу в KeyCRM)" : ""}${p.storageFrom ? `, платне зберігання з ${esc(p.storageFrom)}` : ""}\n📞 <code>${esc(p.phone)}</code>\n\n<code>${esc(pickupText(p))}</code>`,
+      `${p.final ? "⏰ <b>Друге нагадування</b>\n" : ""}<b>№${p.id}</b>${p.buyer ? ` · ${esc(p.buyer)}` : ""} · ${p.days}-й день у відділенні${p.ukr ? " Укрпошти (з дня зміни статусу в KeyCRM)" : ""}${p.storageFrom ? `, платне зберігання з ${esc(p.storageFrom)}` : ""}\n📞 <code>${esc(p.phone)}</code>\n\n<code>${esc(pickupText(p))}</code>`,
       {
         reply_markup: {
           inline_keyboard: [[
             { text: "💬 Відкрити Viber", url: `${origin}/viber/${viberDigits(p.phone)}` },
-            { text: "✅ Написав", callback_data: `reminded:${p.id}` },
+            { text: "✅ Написав", callback_data: `reminded:${p.id}${p.final ? ":f" : ""}` },
           ]],
         },
       },

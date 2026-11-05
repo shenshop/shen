@@ -28,7 +28,7 @@ export async function autoSendPickups(list?: Awaited<ReturnType<typeof pickupsWa
   for (const p of list ?? (await pickupsWaiting())) {
     if (!(await chatForOrder(p.id))) continue;
     if (await notifyOrderChat(p.id, pickupText(p))) {
-      await markReminded(p.id);
+      await markReminded(p.id, p.final);
       done.push(p.id);
     }
   }

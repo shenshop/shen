@@ -56,8 +56,8 @@ export async function POST(req: Request) {
       if (sent) await handleSent(Number(sent[1]));
       const refused = cb.data?.match(/^refused:(\d+)$/);
       if (refused) await markRefusalDone(Number(refused[1]));
-      const reminded = cb.data?.match(/^reminded:(\d+)$/);
-      if (reminded) await markReminded(Number(reminded[1]));
+      const reminded = cb.data?.match(/^reminded:(\d+)(:f)?$/);
+      if (reminded) await markReminded(Number(reminded[1]), Boolean(reminded[2]));
       // Прибираємо кнопки, щоб не натиснути двічі; після «Надіслано» лишаємо позначку.
       if (cb.message) {
         await telegram("editMessageReplyMarkup", {
