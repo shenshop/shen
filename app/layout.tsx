@@ -15,7 +15,7 @@ const font = Manrope({ subsets: ["latin", "cyrillic"], display: "swap", variable
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: { default: "SHEN — взуття з натуральної шкіри", template: "%s — SHEN" },
+  title: { default: "SHEN-SHOP — взуття з натуральної шкіри", template: "%s — SHEN-SHOP" },
   description: "Жіноче та чоловіче взуття з натуральної шкіри. Доставка Новою Поштою та Укрпоштою, оплата при отриманні, обмін 14 днів.",
   openGraph: { type: "website", locale: "uk_UA", siteName: settings.shopName },
 };

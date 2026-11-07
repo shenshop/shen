@@ -6,7 +6,7 @@
 
 export const settings = {
   // Назва магазину (логотип у шапці та внизу сайту)
-  shopName: "SHEN",
+  shopName: "SHEN-SHOP",
 
   // Телефон у форматі +380XXXXXXXXX
   phone: "+380738113785",
