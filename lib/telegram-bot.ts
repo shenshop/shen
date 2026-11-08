@@ -2,7 +2,7 @@ import "server-only";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveNewOrder, moveOrders, type PlannedOrder } from "./stock-check";
-import { customerText, markSent, ordersToNotify, stats, viberDigits } from "./ttn-notify";
+import { customerText, markSent, messengerButtons, ordersToNotify, stats } from "./ttn-notify";
 import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
 import { createManualOrder, parseManualOrder } from "./manual-order";
@@ -139,7 +139,7 @@ export async function handleMove() {
 }
 
 // Кожне відправлене замовлення окремим повідомленням: текст для клієнта (торкнутися, щоб скопіювати),
-// кнопка відкрити чат у Viber і кнопка «Надіслано», яка ставить тег у KeyCRM.
+// кнопки чату у Viber, Telegram, WhatsApp і кнопка «Надіслано», яка ставить тег у KeyCRM.
 export async function handleTtnList(origin: string) {
   await send("⏳ Шукаю ТТН у KeyCRM, це може зайняти до хвилини…");
   const all = await ordersToNotify();
@@ -156,39 +156,40 @@ export async function handleTtnList(origin: string) {
   }
   const MAX = 30;
   await send(
-    `📮 <b>З ТТН, клієнтам ще не надіслано: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.` +
+    `📮 <b>З ТТН, клієнтам ще не надіслано: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber, Telegram або WhatsApp і вставте.` +
       (list.length > MAX ? `\nПоказую перші ${MAX}; після «✅ Надіслано» натисніть кнопку ще раз, щоб побачити решту.` : ""),
   );
   for (const n of list.slice(0, MAX)) {
     await send(`<b>№${n.id}</b>${n.buyer ? ` · ${esc(n.buyer)}` : ""} · ${esc(n.phone)}\n\n<code>${esc(customerText(n))}</code>`, {
       link_preview_options: { is_disabled: true },
       reply_markup: {
-        inline_keyboard: [[
-          { text: "💬 Відкрити Viber", url: `${origin}/viber/${viberDigits(n.phone)}` },
-          { text: "✅ Надіслано", callback_data: `sent:${n.id}` },
-        ]],
+        inline_keyboard: [
+          messengerButtons(n.phone, origin),
+          [{ text: "✅ Надіслано", callback_data: `sent:${n.id}` }],
+        ],
       },
     });
   }
 }
 
-// Відмови від отримання за останні 2 дні: текст для клієнта, Viber і «Написав» (тег у KeyCRM).
+// Відмови від отримання: текст для клієнта, кнопки месенджерів і «Написав» (тег у KeyCRM).
 export async function handleRefusals(origin: string) {
   const { list, statuses } = await refusals();
   if (!list.length) return send(`↩️ Нових відмов немає (статуси: ${esc(statuses.join(", "))}).`);
-  await send(`↩️ <b>Відмови від отримання: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
+  await send(`↩️ <b>Відмови від отримання: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber, Telegram або WhatsApp і вставте.`);
   for (const r of list) {
     await send(
       `<b>№${r.id}</b>${r.buyer ? ` · ${esc(r.buyer)}` : ""}\n📞 <code>${esc(r.phone)}</code>${r.items ? `\n👟 ${esc(r.items)}` : ""}\n\n<code>${esc(refusalText)}</code>`,
       {
         reply_markup: {
-          inline_keyboard: [[
-            { text: "💬 Відкрити Viber", url: `${origin}/viber/${viberDigits(r.phone)}` },
-            { text: "✅ Написав", callback_data: `refused:${r.id}` },
-          ], [
-            ...Object.entries(REASONS).map(([code, label]) => ({ text: label, callback_data: `why:${r.id}:${code}` })),
-            { text: "✍️ Своя", callback_data: `why:${r.id}:own` },
-          ]],
+          inline_keyboard: [
+            messengerButtons(r.phone, origin),
+            [{ text: "✅ Написав", callback_data: `refused:${r.id}` }],
+            [
+              ...Object.entries(REASONS).map(([code, label]) => ({ text: label, callback_data: `why:${r.id}:${code}` })),
+              { text: "✍️ Своя", callback_data: `why:${r.id}:own` },
+            ],
+          ],
         },
       },
     );
@@ -201,16 +202,16 @@ export async function handlePickups(origin: string, quiet = false) {
   const auto = new Set(await autoSendPickups(all));
   const list = all.filter((p) => !auto.has(p.id));
   if (!list.length) return quiet ? undefined : send("📬 Немає посилок, які лежать у відділенні 3-й день і довше.");
-  await send(`📬 <b>Посилки чекають у відділенні, клієнт не забрав: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber і вставте.`);
+  await send(`📬 <b>Посилки чекають у відділенні, клієнт не забрав: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber, Telegram або WhatsApp і вставте.`);
   for (const p of list) {
     await send(
       `${p.final ? "⏰ <b>Друге нагадування</b>\n" : ""}<b>№${p.id}</b>${p.buyer ? ` · ${esc(p.buyer)}` : ""} · ${p.days}-й день у відділенні${p.ukr ? " Укрпошти (з дня зміни статусу в KeyCRM)" : ""}${p.storageFrom ? `, платне зберігання з ${esc(p.storageFrom)}` : ""}\n📞 <code>${esc(p.phone)}</code>\n\n<code>${esc(pickupText(p))}</code>`,
       {
         reply_markup: {
-          inline_keyboard: [[
-            { text: "💬 Відкрити Viber", url: `${origin}/viber/${viberDigits(p.phone)}` },
-            { text: "✅ Написав", callback_data: `reminded:${p.id}${p.final ? ":f" : ""}` },
-          ]],
+          inline_keyboard: [
+            messengerButtons(p.phone, origin),
+            [{ text: "✅ Написав", callback_data: `reminded:${p.id}${p.final ? ":f" : ""}` }],
+          ],
         },
       },
     );

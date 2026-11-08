@@ -38,7 +38,7 @@ export function orderMessage(order: OrderRequest, total: number, crmId: number |
     const size = parseInt(first.size, 10);
     lines.push(
       "",
-      "Текст для Viber (натисніть, щоб скопіювати):",
+      "Текст для клієнта (натисніть, щоб скопіювати):",
       `<code>Доброго дня! Ви зробили замовлення на ${esc(model)}.\n\nВи носите зазвичай розмір ${esc(first.size)}?${
         Number.isFinite(size) ? ` Чи буває ${size - 1}?` : ""
       }</code>`,
@@ -65,12 +65,13 @@ export async function telegram(method: string, body: object) {
 
 // Надсилає текст замовлення, а з ним фото товарів. Якщо фото не пройде,
 // текст однаково надсилається окремо, щоб замовлення не загубилось.
-export async function sendTelegram(text: string, photos: string[] = []): Promise<boolean> {
+export async function sendTelegram(text: string, photos: string[] = [], replyMarkup?: object): Promise<boolean> {
+  const markup = replyMarkup ? { reply_markup: replyMarkup } : {};
   if (!telegramEnabled()) return false;
   try {
     // Одне фото і короткий текст: одне повідомлення з підписом.
     if (photos.length === 1 && text.length <= 1024) {
-      if (await telegram("sendPhoto", { photo: photos[0], caption: text, parse_mode: "HTML" })) return true;
+      if (await telegram("sendPhoto", { photo: photos[0], caption: text, parse_mode: "HTML", ...markup })) return true;
     } else if (photos.length === 1) {
       await telegram("sendPhoto", { photo: photos[0] }).catch(() => false);
     } else if (photos.length > 1) {
@@ -78,7 +79,7 @@ export async function sendTelegram(text: string, photos: string[] = []): Promise
         () => false,
       );
     }
-    return await telegram("sendMessage", { text, parse_mode: "HTML" });
+    return await telegram("sendMessage", { text, parse_mode: "HTML", ...markup });
   } catch (e) {
     console.error(e);
     return false;

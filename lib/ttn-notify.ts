@@ -97,6 +97,16 @@ export function viberDigits(phone: string) {
   return d;
 }
 
+/** Кнопки написати клієнту: Viber (через сторінку сайту, бо Telegram не відкриває viber://), Telegram за номером і WhatsApp. */
+export function messengerButtons(phone: string, origin: string) {
+  const d = viberDigits(phone);
+  return [
+    { text: "💜 Viber", url: `${origin}/viber/${d}` },
+    { text: "✈️ Telegram", url: `https://t.me/+${d}` },
+    { text: "💚 WhatsApp", url: `https://wa.me/${d}` },
+  ];
+}
+
 export function customerText(n: TtnNotice) {
   return `Доброго дня! Ваше замовлення передано в доставку ${n.nova ? "Новою Поштою" : "Укрпоштою"} 📦\nНомер ТТН: ${n.ttn}\n\nДякуємо за покупку! SHEN`;
 }

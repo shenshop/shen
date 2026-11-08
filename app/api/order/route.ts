@@ -4,6 +4,8 @@ import { createOrder, keycrmEnabled } from "@/lib/keycrm";
 import { normalizePhone } from "@/lib/format";
 import type { OrderRequest } from "@/lib/types";
 import { orderMessage, orderPhotos, sendTelegram } from "@/lib/telegram";
+import { messengerButtons } from "@/lib/ttn-notify";
+import { SITE_URL } from "@/lib/seo";
 import { itemName } from "@/lib/variants";
 import { pairDiscount } from "@/lib/discount";
 
@@ -66,12 +68,12 @@ export async function POST(req: Request) {
 
   try {
     const created = await createOrder(order, total);
-    await sendTelegram(orderMessage(order, total, created.id), orderPhotos(order));
+    await sendTelegram(orderMessage(order, total, created.id), orderPhotos(order), { inline_keyboard: [messengerButtons(order.phone, SITE_URL)] });
     return NextResponse.json({ ok: true, id: created.id, total });
   } catch (e) {
     console.error(e);
     // KeyCRM недоступний: якщо замовлення дійшло в Telegram, клієнт його не втрачає.
-    if (await sendTelegram(orderMessage(order, total, null), orderPhotos(order))) {
+    if (await sendTelegram(orderMessage(order, total, null), orderPhotos(order), { inline_keyboard: [messengerButtons(order.phone, SITE_URL)] })) {
       return NextResponse.json({ ok: true, id: Math.floor(Date.now() / 1000) % 100000, total });
     }
     return NextResponse.json(
