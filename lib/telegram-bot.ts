@@ -2,7 +2,7 @@ import "server-only";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveNewOrder, moveOrders, type PlannedOrder } from "./stock-check";
-import { customerText, markSent, messengerButtons, ordersToNotify, stats, STATUS_LISTS, ttnsInStatus, type StatusListId } from "./ttn-notify";
+import { customerText, markSent, messengerButtons, ordersToNotify, stats, STATUS_LISTS, type StatusListId } from "./ttn-notify";
 import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
 import { createManualOrder, parseManualOrder } from "./manual-order";
@@ -151,23 +151,24 @@ export async function handleMove() {
 
 // Кожне відправлене замовлення окремим повідомленням: текст для клієнта (торкнутися, щоб скопіювати),
 // кнопки чату у Viber, Telegram, WhatsApp і кнопка «Надіслано», яка ставить тег у KeyCRM.
-export async function handleTtnList(origin: string) {
-  await send("⏳ Шукаю ТТН у KeyCRM, це може зайняти до хвилини…");
-  const all = await ordersToNotify();
+export async function handleTtnList(origin: string, statusId?: StatusListId) {
+  const where = statusId ? `«${STATUS_LISTS[statusId]}»` : "«Передано в доставку» і «У дорозі»";
+  await send(`⏳ Шукаю ТТН (${statusId ? where : "у KeyCRM"}), це може зайняти до хвилини…`);
+  const all = await ordersToNotify(statusId);
   // Тим, хто підключив бот для клієнтів, ТТН іде туди автоматично; у списку лишаються решта.
   const auto = new Set(await autoSendTtns(all));
   const list = all.filter((n) => !auto.has(n.id));
   if (!list.length) {
     return send(
       `📮 Немає замовлень з ТТН, яким ще не надіслали номер.\n\n` +
-        `«Передано в доставку» і «У дорозі»: ${stats.inStatus}, з ТТН і телефоном: ${stats.withTtn}, ` +
+        `${where}: ${stats.inStatus}, з ТТН і телефоном: ${stats.withTtn}, ` +
         `без тегу «ТТН надіслано»: ${stats.notSent}, за останні 4 дні: ${stats.recent}` +
         (stats.inStatus && !stats.withTtn ? `\n${esc(stats.sample)}` : ""),
     );
   }
   const MAX = 30;
   await send(
-    `📮 <b>З ТТН, клієнтам ще не надіслано: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber, Telegram або WhatsApp і вставте.` +
+    `📮 <b>${statusId ? `${STATUS_LISTS[statusId]}: ` : ""}з ТТН, клієнтам ще не надіслано: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber, Telegram або WhatsApp і вставте.` +
       (list.length > MAX ? `\nПоказую перші ${MAX}; після «✅ Надіслано» натисніть кнопку ще раз, щоб побачити решту.` : ""),
   );
   for (const n of list.slice(0, MAX)) {
@@ -181,29 +182,6 @@ export async function handleTtnList(origin: string) {
       },
     });
   }
-}
-
-// Усі замовлення в одному статусі з ТТН, одним-кількома повідомленнями (ТТН торкнутися, щоб скопіювати).
-export async function handleStatusTtns(statusId: StatusListId) {
-  const name = STATUS_LISTS[statusId];
-  await send(`⏳ Шукаю «${name}» у KeyCRM…`);
-  const list = await ttnsInStatus(statusId);
-  if (!list.length) return send(`У статусі «${name}» замовлень немає.`);
-  const noTtn = list.filter((o) => !o.ttn).length;
-  const lines = list.map(
-    (o) =>
-      `<b>№${o.id}</b>${o.buyer ? ` · ${esc(o.buyer)}` : ""}${o.phone ? ` · ${esc(o.phone)}` : ""}\n` +
-      `${o.ttn ? `<code>${esc(o.ttn)}</code>` : "без ТТН"}${o.items ? ` · ${esc(o.items)}` : ""}`,
-  );
-  let chunk = `<b>${esc(name)}: ${list.length}</b>${noTtn ? ` (без ТТН: ${noTtn})` : ""}`;
-  for (const line of lines) {
-    if (chunk.length + line.length + 2 > 3900) {
-      await send(chunk);
-      chunk = "";
-    }
-    chunk += (chunk ? "\n\n" : "") + line;
-  }
-  if (chunk) await send(chunk);
 }
 
 // Відмови від отримання: текст для клієнта, кнопки месенджерів і «Написав» (тег у KeyCRM).

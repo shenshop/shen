@@ -44,17 +44,24 @@ async function sentTagId() {
   return id;
 }
 
-export async function ordersToNotify(): Promise<TtnNotice[]> {
+export async function ordersToNotify(statusId?: StatusListId): Promise<TtnNotice[]> {
   // «Передано в доставку» у KeyCRM — статус №8 (за назвою шукати не можна: є схожі назви).
   // Замовлення, які змінювались за останні 4 дні (передали в доставку, поїхали), з ТТН і без тегу «ТТН надіслано» (Дрон, 2026-11-04).
   const tagId = await sentTagId();
   const services = rows(await request<List<Named>>("/order/delivery-service?limit=50", fresh));
   const novaIds = new Set(services.filter((s) => /^нп$|нова\s*пошта/i.test(s.name.trim())).map((s) => s.id));
 
+  // «Прибуло у відділення» шукаємо за назвою, як у «Не забрали».
+  let ids: number[] = statusId ? [statusId] : SHIPPED_STATUS_IDS;
+  if (statusId === 20) {
+    const statuses = rows(await request<List<Named>>("/order/status?limit=50", fresh));
+    const found = statuses.filter((s) => /прибул|прибув/i.test(s.name.trim())).map((s) => s.id);
+    if (found.length) ids = found;
+  }
   const orders: KOrder[] = [];
   for (let page = 1; page <= 3; page++) {
     const res = await request<List<KOrder> & { next_page_url?: string | null }>(
-      `/order?filter[status_id]=${SHIPPED_STATUS_IDS.join(",")}&include=buyer,shipping.deliveryService,tags&sort=-id&limit=50&page=${page}`,
+      `/order?filter[status_id]=${ids.join(",")}&include=buyer,shipping.deliveryService,tags&sort=-id&limit=50&page=${page}`,
       fresh,
     );
     orders.push(...rows(res));
@@ -111,38 +118,10 @@ export function customerText(n: TtnNotice) {
   return `Доброго дня! Ваше замовлення передано в доставку ${n.nova ? "Новою Поштою" : "Укрпоштою"} 📦\nНомер ТТН: ${n.ttn}\n\nДякуємо за покупку! SHEN`;
 }
 
-// Список ТТН для Дрона за одним статусом (без фільтра за тегом і датою): кнопки «Передано в доставку», «У дорозі», «Прибуло у відділення».
+// Окремі кнопки бота для Дрона: той самий список «ТТН клієнтам», але лише одного статусу.
 export const STATUS_LISTS = {
   8: "Передано в доставку",
   9: "У дорозі",
   20: "Прибуло у відділення",
 } as const;
 export type StatusListId = keyof typeof STATUS_LISTS;
-
-export type StatusTtn = { id: number; buyer: string; phone: string; ttn: string; items: string };
-
-export async function ttnsInStatus(statusId: StatusListId): Promise<StatusTtn[]> {
-  const orders: (KOrder & { products?: { name?: string; offer?: { sku?: string } | null }[] | null })[] = [];
-  // «Прибуло у відділення» шукаємо за назвою, як у «Не забрали» (id могли змінити в KeyCRM).
-  let ids: number[] = [statusId];
-  if (statusId === 20) {
-    const statuses = rows(await request<List<Named>>("/order/status?limit=50", fresh));
-    const found = statuses.filter((s) => /прибул|прибув/i.test(s.name.trim())).map((s) => s.id);
-    if (found.length) ids = found;
-  }
-  for (let page = 1; page <= 4; page++) {
-    const res = await request<List<(typeof orders)[number]> & { next_page_url?: string | null }>(
-      `/order?filter[status_id]=${ids.join(",")}&include=buyer,shipping.deliveryService,products.offer&sort=id&limit=50&page=${page}`,
-      fresh,
-    );
-    orders.push(...rows(res));
-    if (Array.isArray(res) || !res.next_page_url) break;
-  }
-  return orders.map((o) => ({
-    id: o.id,
-    buyer: o.buyer?.full_name?.trim() || "",
-    phone: o.buyer?.phone?.trim() || "",
-    ttn: o.shipping?.tracking_code?.trim() || "",
-    items: (o.products ?? []).map((p) => p.offer?.sku || p.name || "").filter(Boolean).join(", "),
-  }));
-}
