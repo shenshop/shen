@@ -2,7 +2,7 @@ import "server-only";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveNewOrder, moveOrders, type PlannedOrder } from "./stock-check";
-import { customerText, markSent, messengerButtons, ordersToNotify, stats } from "./ttn-notify";
+import { customerText, markSent, messengerButtons, ordersToNotify, stats, STATUS_LISTS, ttnsInStatus, type StatusListId } from "./ttn-notify";
 import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
 import { createManualOrder, parseManualOrder } from "./manual-order";
@@ -15,8 +15,19 @@ export const TTN_BUTTON = "📮 ТТН клієнтам";
 export const REFRESH_BUTTON = "🔄 Оновити сайт";
 export const REFUSALS_BUTTON = "↩️ Відмови";
 export const PICKUP_BUTTON = "📬 Не забрали";
+// Кнопки списку ТТН для Дрона за статусом KeyCRM.
+export const STATUS_BUTTONS: Record<string, StatusListId> = {
+  "🚚 Передано в доставку": 8,
+  "🛣 У дорозі": 9,
+  "🏤 Прибуло у відділення": 20,
+};
 export const KEYBOARD = {
-  keyboard: [[{ text: CHECK_BUTTON }, { text: TTN_BUTTON }], [{ text: REFUSALS_BUTTON }, { text: PICKUP_BUTTON }], [{ text: REFRESH_BUTTON }]],
+  keyboard: [
+    [{ text: CHECK_BUTTON }, { text: TTN_BUTTON }],
+    Object.keys(STATUS_BUTTONS).map((text) => ({ text })),
+    [{ text: REFUSALS_BUTTON }, { text: PICKUP_BUTTON }],
+    [{ text: REFRESH_BUTTON }],
+  ],
   resize_keyboard: true,
   is_persistent: true,
 };
@@ -170,6 +181,29 @@ export async function handleTtnList(origin: string) {
       },
     });
   }
+}
+
+// Усі замовлення в одному статусі з ТТН, одним-кількома повідомленнями (ТТН торкнутися, щоб скопіювати).
+export async function handleStatusTtns(statusId: StatusListId) {
+  const name = STATUS_LISTS[statusId];
+  await send(`⏳ Шукаю «${name}» у KeyCRM…`);
+  const list = await ttnsInStatus(statusId);
+  if (!list.length) return send(`У статусі «${name}» замовлень немає.`);
+  const noTtn = list.filter((o) => !o.ttn).length;
+  const lines = list.map(
+    (o) =>
+      `<b>№${o.id}</b>${o.buyer ? ` · ${esc(o.buyer)}` : ""}${o.phone ? ` · ${esc(o.phone)}` : ""}\n` +
+      `${o.ttn ? `<code>${esc(o.ttn)}</code>` : "без ТТН"}${o.items ? ` · ${esc(o.items)}` : ""}`,
+  );
+  let chunk = `<b>${esc(name)}: ${list.length}</b>${noTtn ? ` (без ТТН: ${noTtn})` : ""}`;
+  for (const line of lines) {
+    if (chunk.length + line.length + 2 > 3900) {
+      await send(chunk);
+      chunk = "";
+    }
+    chunk += (chunk ? "\n\n" : "") + line;
+  }
+  if (chunk) await send(chunk);
 }
 
 // Відмови від отримання: текст для клієнта, кнопки месенджерів і «Написав» (тег у KeyCRM).

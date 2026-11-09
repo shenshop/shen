@@ -110,3 +110,32 @@ export function messengerButtons(phone: string, origin: string) {
 export function customerText(n: TtnNotice) {
   return `Доброго дня! Ваше замовлення передано в доставку ${n.nova ? "Новою Поштою" : "Укрпоштою"} 📦\nНомер ТТН: ${n.ttn}\n\nДякуємо за покупку! SHEN`;
 }
+
+// Список ТТН для Дрона за одним статусом (без фільтра за тегом і датою): кнопки «Передано в доставку», «У дорозі», «Прибуло у відділення».
+export const STATUS_LISTS = {
+  8: "Передано в доставку",
+  9: "У дорозі",
+  20: "Прибуло у відділення",
+} as const;
+export type StatusListId = keyof typeof STATUS_LISTS;
+
+export type StatusTtn = { id: number; buyer: string; phone: string; ttn: string; items: string };
+
+export async function ttnsInStatus(statusId: StatusListId): Promise<StatusTtn[]> {
+  const orders: (KOrder & { products?: { name?: string; offer?: { sku?: string } | null }[] | null })[] = [];
+  for (let page = 1; page <= 4; page++) {
+    const res = await request<List<(typeof orders)[number]> & { next_page_url?: string | null }>(
+      `/order?filter[status_id]=${statusId}&include=buyer,shipping.deliveryService,products.offer&sort=id&limit=50&page=${page}`,
+      fresh,
+    );
+    orders.push(...rows(res));
+    if (Array.isArray(res) || !res.next_page_url) break;
+  }
+  return orders.map((o) => ({
+    id: o.id,
+    buyer: o.buyer?.full_name?.trim() || "",
+    phone: o.buyer?.phone?.trim() || "",
+    ttn: o.shipping?.tracking_code?.trim() || "",
+    items: (o.products ?? []).map((p) => p.offer?.sku || p.name || "").filter(Boolean).join(", "),
+  }));
+}
