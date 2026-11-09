@@ -31,7 +31,7 @@ function parseTime(v?: string) {
   return Date.parse(/[TZ+]/.test(v) ? v : v.replace(" ", "T") + "Z");
 }
 
-export type TtnNotice = { id: number; buyer: string; phone: string; ttn: string; nova: boolean };
+export type TtnNotice = { id: number; buyer: string; phone: string; ttn: string; nova: boolean; arrived?: boolean };
 
 // Id тегу не змінюється: запамʼятовуємо, щоб кожне «✅ Надіслано» коштувало 1 запит до KeyCRM, а не 2.
 let cachedTagId: number | null = null;
@@ -90,6 +90,7 @@ export async function ordersToNotify(statusId?: StatusListId): Promise<TtnNotice
       phone: o.buyer!.phone!,
       ttn: o.shipping!.tracking_code!.trim(),
       nova: novaIds.has(o.shipping?.delivery_service_id ?? -1),
+      arrived: statusId === 20,
     }));
 }
 
@@ -115,6 +116,7 @@ export function messengerButtons(phone: string, origin: string) {
 }
 
 export function customerText(n: TtnNotice) {
+  if (n.arrived) return `Доброго дня! Ваша посилка вже у відділенні ${n.nova ? "Нової Пошти" : "Укрпошти"} 📦\nНомер ТТН: ${n.ttn}\n\nДякуємо за покупку! SHEN`;
   return `Доброго дня! Ваше замовлення передано в доставку ${n.nova ? "Новою Поштою" : "Укрпоштою"} 📦\nНомер ТТН: ${n.ttn}\n\nДякуємо за покупку! SHEN`;
 }
 
