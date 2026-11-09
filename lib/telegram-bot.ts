@@ -184,6 +184,18 @@ export async function handleTtnList(origin: string, statusId?: StatusListId) {
   }
 }
 
+// Щоденне нагадування (10:00 Київ): скільки замовлень за 4 дні без тегу «ТТН надіслано», по кожному статусу.
+export async function remindUnsentTtns() {
+  const counts: [string, number][] = [];
+  for (const [text, id] of Object.entries(STATUS_BUTTONS)) counts.push([text, (await ordersToNotify(id)).length]);
+  if (!counts.some(([, n]) => n)) return;
+  await send(
+    `⏰ <b>Клієнтам не надіслано ТТН</b> (останні 4 дні, без тегу «ТТН надіслано»):\n` +
+      counts.filter(([, n]) => n).map(([text, n]) => `${text}: ${n}`).join("\n") +
+      `\n\nНатисніть потрібну кнопку внизу, щоб побачити список.`,
+  );
+}
+
 // Відмови від отримання: текст для клієнта, кнопки месенджерів і «Написав» (тег у KeyCRM).
 export async function handleRefusals(origin: string) {
   const { list, statuses } = await refusals();
