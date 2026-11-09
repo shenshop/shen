@@ -127,7 +127,7 @@ export async function ttnsInStatus(statusId: StatusListId): Promise<StatusTtn[]>
   let ids: number[] = [statusId];
   if (statusId === 20) {
     const statuses = rows(await request<List<Named>>("/order/status?limit=50", fresh));
-    const found = statuses.filter((s) => /^прибу\S* (у|до|в) відділенн/i.test(s.name.trim())).map((s) => s.id);
+    const found = statuses.filter((s) => /прибул|прибув/i.test(s.name.trim())).map((s) => s.id);
     if (found.length) ids = found;
   }
   for (let page = 1; page <= 4; page++) {
