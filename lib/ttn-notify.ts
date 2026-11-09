@@ -123,9 +123,16 @@ export type StatusTtn = { id: number; buyer: string; phone: string; ttn: string;
 
 export async function ttnsInStatus(statusId: StatusListId): Promise<StatusTtn[]> {
   const orders: (KOrder & { products?: { name?: string; offer?: { sku?: string } | null }[] | null })[] = [];
+  // «Прибуло у відділення» шукаємо за назвою, як у «Не забрали» (id могли змінити в KeyCRM).
+  let ids: number[] = [statusId];
+  if (statusId === 20) {
+    const statuses = rows(await request<List<Named>>("/order/status?limit=50", fresh));
+    const found = statuses.filter((s) => /^прибу\S* (у|до|в) відділенн/i.test(s.name.trim())).map((s) => s.id);
+    if (found.length) ids = found;
+  }
   for (let page = 1; page <= 4; page++) {
     const res = await request<List<(typeof orders)[number]> & { next_page_url?: string | null }>(
-      `/order?filter[status_id]=${statusId}&include=buyer,shipping.deliveryService,products.offer&sort=id&limit=50&page=${page}`,
+      `/order?filter[status_id]=${ids.join(",")}&include=buyer,shipping.deliveryService,products.offer&sort=id&limit=50&page=${page}`,
       fresh,
     );
     orders.push(...rows(res));
