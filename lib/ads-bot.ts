@@ -27,8 +27,23 @@ export async function adsBot<T = unknown>(method: string, body: object): Promise
   return json;
 }
 
-const send = (text: string, extra: object = {}) =>
-  adsBot("sendMessage", { chat_id: process.env.TELEGRAM_CHAT_ID, text, parse_mode: "HTML", disable_web_page_preview: true, ...extra });
+// Telegram приймає до 4096 символів, тому довгий текст ділимо по порожніх рядках.
+async function send(text: string, extra: object = {}) {
+  const parts: string[] = [];
+  let cur = "";
+  for (const block of text.split("\n\n")) {
+    if (cur && cur.length + block.length + 2 > 3800) {
+      parts.push(cur);
+      cur = block;
+    } else cur = cur ? `${cur}\n\n${block}` : block;
+  }
+  if (cur) parts.push(cur);
+  let last: Awaited<ReturnType<typeof adsBot>> = { ok: false };
+  for (const part of parts) {
+    last = await adsBot("sendMessage", { chat_id: process.env.TELEGRAM_CHAT_ID, text: part, parse_mode: "HTML", disable_web_page_preview: true, ...extra });
+  }
+  return last;
+}
 
 export async function adsWebhookSecret() {
   const data = new TextEncoder().encode(`shen-ads-bot:${process.env.ADS_BOT_TOKEN}`);
@@ -53,13 +68,21 @@ type Campaign = { id: string; name: string; daily_budget?: string; effective_sta
 type Action = { action_type: string; value: string };
 type Insight = { campaign_id: string; campaign_name: string; spend: string; actions?: Action[] };
 
+// Увімкнені кампанії, які реально крутяться: була витрата сьогодні або за 7 днів.
+// Старі кампанії зі статусом «активна», але без живих груп оголошень, не показуємо (їх багато,
+// і через них повідомлення ставало задовгим для Telegram).
 async function activeCampaigns() {
-  const r = await meta<{ data: Campaign[] }>(`${ACCOUNT}/campaigns`, {
-    fields: "id,name,daily_budget,effective_status",
-    effective_status: JSON.stringify(["ACTIVE", "IN_PROCESS", "WITH_ISSUES"]),
-    limit: "100",
-  });
-  return r.data;
+  const [r, today, week] = await Promise.all([
+    meta<{ data: Campaign[] }>(`${ACCOUNT}/campaigns`, {
+      fields: "id,name,daily_budget,effective_status",
+      effective_status: JSON.stringify(["ACTIVE", "IN_PROCESS", "WITH_ISSUES"]),
+      limit: "200",
+    }),
+    insights("today"),
+    insights("last_7d"),
+  ]);
+  const spent = new Set([...today, ...week].filter((s) => Number(s.spend) > 0).map((s) => s.campaign_id));
+  return r.data.filter((c) => spent.has(c.id));
 }
 
 // Покупки з пікселя сайту. Meta може назвати їх по-різному, беремо першу знайдену назву.
