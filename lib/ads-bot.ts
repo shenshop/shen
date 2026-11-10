@@ -4,7 +4,7 @@ import { esc } from "./telegram";
 // Бот для реклами (окремий від робочого бота). Секрети в Cloudflare: ADS_BOT_TOKEN (від @BotFather)
 // і META_TOKEN (токен системного користувача Meta з дозволами ads_read та ads_management).
 // Відповідає лише Дронові (TELEGRAM_CHAT_ID). Показує статистику кампаній, щоранку надсилає звіт
-// і міняє бюджет або вимикає кампанію лише після кнопки «✅ Так».
+// і міняє бюджет або вимикає кампанію лише після кнопки «✅ Так». Кнопка «💳 Баланс» — гроші на рекламному акаунті.
 
 const ACCOUNT = "act_814873905794399";
 const GRAPH = "https://graph.facebook.com/v24.0";
@@ -142,13 +142,51 @@ async function advice() {
   return out.join("\n");
 }
 
+// Баланс рекламного акаунта. Для передоплаченого акаунта Meta показує залишок у funding_source_details
+// (напр. «Доступний баланс (12,34 USD)»); для оплати карткою — суму, яку ще спишуть (balance).
+type Account = {
+  name: string;
+  currency: string;
+  amount_spent: string;
+  balance: string;
+  spend_cap?: string;
+  is_prepay_account?: boolean;
+  funding_source_details?: { display_string?: string };
+};
+
+export async function balance() {
+  const [a, camps] = await Promise.all([
+    meta<Account>(ACCOUNT, {
+      fields: "name,currency,amount_spent,balance,spend_cap,is_prepay_account,funding_source_details",
+    }),
+    activeCampaigns(),
+  ]);
+  const cur = a.currency === "USD" ? "$" : ` ${a.currency}`;
+  const money = (cents: number) => `${(cents / 100).toFixed(2).replace(".", ",")}${cur}`;
+  const perDay = camps.reduce((s, c) => s + (c.daily_budget ? Number(c.daily_budget) : 0), 0);
+  const out = [`💳 <b>Рекламний акаунт</b> ${esc(a.name)}`];
+  if (a.funding_source_details?.display_string) out.push(`Спосіб оплати: ${esc(a.funding_source_details.display_string)}`);
+  // Прогноз «вистачить на N днів» для передоплати: беремо число з рядка «Доступний баланс (…)».
+  const prepaid = a.is_prepay_account ? a.funding_source_details?.display_string?.match(/([\d\s.,]+)\s*[A-Z]{3}/) : null;
+  if (prepaid && perDay > 0) {
+    const left = Number(prepaid[1].replace(/\s/g, "").replace(",", ".")) * 100;
+    if (Number.isFinite(left)) out.push(`Залишку вистачить приблизно на ${Math.floor(left / perDay)} дн.`);
+  }
+  if (!a.is_prepay_account) out.push(`Нараховано до списання з картки: ${money(Number(a.balance))}`);
+  if (a.spend_cap && Number(a.spend_cap) > 0) {
+    out.push(`Ліміт витрат акаунта: ${money(Number(a.spend_cap))}, залишилось ${money(Number(a.spend_cap) - Number(a.amount_spent))}`);
+  }
+  out.push(`Активні бюджети разом: ${money(perDay)} на день`);
+  return out.join("\n");
+}
+
 // ---------- Telegram ----------
 
 const KEYBOARD = {
   keyboard: [
     [{ text: "📊 Сьогодні" }, { text: "📈 Вчора" }],
     [{ text: "📅 3 дні" }, { text: "📆 7 днів" }],
-    [{ text: "💰 Бюджети" }, { text: "💡 Поради" }],
+    [{ text: "💰 Бюджети" }, { text: "💡 Поради" }, { text: "💳 Баланс" }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -176,6 +214,7 @@ export async function handleAdsUpdate(u: Update) {
   try {
     if (Object.hasOwn(BUTTONS, text)) await send(await report(BUTTONS[text]), { reply_markup: KEYBOARD });
     else if (text === "💰 Бюджети") await budgetList();
+    else if (text === "💳 Баланс") await send(await balance(), { reply_markup: KEYBOARD });
     else if (text === "💡 Поради") await send((await advice()) || "За останні 3 дні все в нормі, нічого міняти не треба.", { reply_markup: KEYBOARD });
     else await send("Оберіть кнопку внизу 👇", { reply_markup: KEYBOARD });
   } catch (e) {
