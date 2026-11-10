@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { telegram } from "@/lib/telegram";
 import { handlePickups, remindUnsentTtns, webhookSecret } from "@/lib/telegram-bot";
 import { SITE_URL } from "@/lib/seo";
+import { dailyAdsReport } from "@/lib/ads-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,12 @@ export async function POST(req: Request) {
   } catch (e) {
     console.error(e);
     await telegram("sendMessage", { text: `⚠️ Нагадування про ТТН: ${String(e instanceof Error ? e.message : e).slice(0, 300)}` });
+  }
+  try {
+    await dailyAdsReport();
+  } catch (e) {
+    console.error(e);
+    await telegram("sendMessage", { text: `⚠️ Звіт про рекламу: ${String(e instanceof Error ? e.message : e).slice(0, 300)}` });
   }
   return NextResponse.json({ ok: true });
 }
