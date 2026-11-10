@@ -97,10 +97,10 @@ function purchases(actions: Action[] = []) {
 
 export type Period = "today" | "yesterday" | "last_3d" | "last_7d";
 const PERIOD_NAME: Record<Period, string> = {
-  today: "сьогодні",
-  yesterday: "вчора",
-  last_3d: "останні 3 дні (без сьогодні)",
-  last_7d: "останні 7 днів (без сьогодні)",
+  today: "Сьогодні",
+  yesterday: "Вчора",
+  last_3d: "3 дні",
+  last_7d: "7 днів",
 };
 
 async function insights(period: Period) {
@@ -139,19 +139,22 @@ function verdict(r: Row) {
   return cpa < GOOD ? "🟢" : cpa <= BAD ? "🟡" : "🔴";
 }
 
+// Стисло: одна кампанія — один рядок «🟢 назва — витрата · покупки · ціна покупки».
+const short = (name: string) => (name.length > 24 ? `${name.slice(0, 23)}…` : name);
+const usd0 = (n: number) => `${n.toFixed(n >= 100 ? 0 : 1).replace(".", ",")}$`;
+
 function line(r: Row) {
-  const cpa = r.buys ? usd(r.spend / r.buys) : "—";
-  const budget = r.budget != null ? ` · бюджет ${usd(r.budget)}/день` : "";
-  return `${verdict(r)} <b>${esc(r.name)}</b>\n   ${usd(r.spend)} · покупок ${r.buys} · за покупку ${cpa}${budget}`;
+  const cpa = r.buys ? ` · ${usd0(r.spend / r.buys)}` : "";
+  return `${verdict(r)} ${esc(short(r.name))} — ${usd0(r.spend)} · ${r.buys} пок${cpa}`;
 }
 
 export async function report(period: Period) {
   const list = await rows(period);
   const spend = list.reduce((s, r) => s + r.spend, 0);
   const buys = list.reduce((s, r) => s + r.buys, 0);
-  const head = `📊 Реклама, ${PERIOD_NAME[period]}\nВсього: ${usd(spend)} · покупок ${buys} · за покупку ${buys ? usd(spend / buys) : "—"}`;
-  if (!list.length) return `${head}\n\nАктивних кампаній немає.`;
-  return `${head}\n\n${list.map(line).join("\n\n")}\n\n🟢 до ${GOOD} $ · 🟡 ${GOOD}–${BAD} $ · 🔴 понад ${BAD} $ або ${NO_SALES_LIMIT} $ без покупок · ⚪ ще мало даних`;
+  const head = `📊 <b>${PERIOD_NAME[period]}</b>: ${usd0(spend)} · ${buys} пок${buys ? ` · ${usd0(spend / buys)}` : ""}`;
+  if (!list.length) return `${head}\nАктивних кампаній немає.`;
+  return `${head}\n${list.map(line).join("\n")}`;
 }
 
 /** Підказки за останні 3 дні: що підняти, що вимкнути. */
