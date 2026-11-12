@@ -98,6 +98,8 @@ const KEYS = Object.keys(LABEL) as (keyof typeof LABEL)[];
 export async function sizeReport(key: string) {
   const { orders, bucket } = await load();
   const bySize = new Map<string, Record<Bucket, number>>();
+  // Номери замовлень для кожного розміру і стану.
+  const ids = new Map<string, Set<number>>();
   let name = key;
   for (const o of orders) {
     let b = bucket.get(o.status_id) ?? "waiting";
@@ -111,13 +113,18 @@ export async function sizeReport(key: string) {
       const r = bySize.get(size) ?? { done: 0, transit: 0, arrived: 0, refused: 0, canceled: 0, ttn: 0, waiting: 0 };
       r[b] += p.quantity || 1;
       bySize.set(size, r);
+      const k = `${size}|${b}`;
+      ids.set(k, (ids.get(k) ?? new Set()).add(o.id));
     }
   }
   if (!bySize.size) return `👟 <b>${esc(name)}</b>: за ${DAYS} днів замовлень немає.`;
 
   const sizes = [...bySize].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]) || a[0].localeCompare(b[0]));
   const lines = sizes.map(([size, r]) => {
-    const parts = KEYS.filter((k) => r[k]).map((k) => `${LABEL[k]} ${r[k]}`);
+    const parts = KEYS.filter((k) => r[k]).map((k) => {
+      const nums = [...(ids.get(`${size}|${k}`) ?? [])].sort((a, b) => a - b).map((n) => `№${n}`);
+      return `${LABEL[k]} ${r[k]} (${nums.join(", ")})`;
+    });
     return `<b>${esc(size)}</b> — ${parts.join(", ")}`;
   });
   const sum = (k: Bucket) => sizes.reduce((s, [, r]) => s + r[k], 0);
