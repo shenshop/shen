@@ -83,18 +83,20 @@ export async function modelList() {
   return [...count].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([model, n]) => ({ model, n }));
 }
 
-const ICON: Record<Exclude<Bucket, "canceled">, string> = {
-  done: "✅",
-  transit: "🚚",
-  ttn: "📦",
-  arrived: "🏤",
-  refused: "↩️",
-  waiting: "⏳",
+// Порядок і назви станів у звіті — текстом, щоб було зрозуміло без пояснень.
+const LABEL: Record<Exclude<Bucket, "canceled">, string> = {
+  done: "забрали",
+  arrived: "у відділенні",
+  transit: "в дорозі",
+  ttn: "є ТТН",
+  waiting: "не відправлено",
+  refused: "відмова",
 };
+const KEYS = Object.keys(LABEL) as (keyof typeof LABEL)[];
 
 /** Звіт по одній моделі: рядок на розмір. */
 export async function sizeReport(key: string) {
-  const { orders, bucket, statuses } = await load();
+  const { orders, bucket } = await load();
   const bySize = new Map<string, Record<Bucket, number>>();
   let name = key;
   for (const o of orders) {
@@ -115,19 +117,18 @@ export async function sizeReport(key: string) {
 
   const sizes = [...bySize].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]) || a[0].localeCompare(b[0]));
   const lines = sizes.map(([size, r]) => {
-    const parts = (Object.keys(ICON) as (keyof typeof ICON)[]).filter((k) => r[k]).map((k) => `${ICON[k]}${r[k]}`);
-    return `<b>${esc(size)}</b> — ${parts.join(" ")}`;
+    const parts = KEYS.filter((k) => r[k]).map((k) => `${LABEL[k]} ${r[k]}`);
+    return `<b>${esc(size)}</b> — ${parts.join(", ")}`;
   });
   const sum = (k: Bucket) => sizes.reduce((s, [, r]) => s + r[k], 0);
-  const doneNames = statuses.filter((s) => bucket.get(s.id) === "done").map((s) => s.name.trim());
+  const total = KEYS.filter((k) => sum(k)).map((k) => `${LABEL[k]} ${sum(k)}`);
   return [
     `👟 <b>${esc(name)}</b>, замовлення за ${DAYS} днів`,
     "",
     ...lines,
     "",
-    `Разом: ✅ забрали ${sum("done")} · 📦 є ТТН ${sum("ttn")} · 🚚 в дорозі ${sum("transit")} · 🏤 у відділенні ${sum("arrived")} · ↩️ відмова ${sum("refused")} · ⏳ ще не відправлено ${sum("waiting")}`,
+    `<b>Разом:</b> ${total.join(", ")}`,
     "",
-    `↩️ відмова: пара повернеться на склад. 📦: ТТН створено, ще не в дорозі. ⏳: без ТТН (нове, виготовляється, чекає відправки).`,
-    `✅ рахую статуси: ${esc(doneNames.join(", ") || "—")}`,
+    `«Відмова» — пара повернеться на склад. «Є ТТН» — накладна створена, але посилка ще не в дорозі. «Не відправлено» — без ТТН.`,
   ].join("\n");
 }
