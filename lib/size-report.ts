@@ -149,6 +149,21 @@ export async function sizeReport(key: string) {
       out.push(`   ${nums.join(", ")}`);
     }
   }
-  out.push("", `«На складі» — вільний залишок на складі «Основний» у KeyCRM (без резерву під замовлення). Замовлення — за останні ${DAYS} днів.`);
+  // Попит за DAYS днів: усі пари, крім відмов. Вистачить = склад + відмови, що повертаються.
+  // Радимо дозамовити, якщо цього менше, ніж зазвичай продається за 2 тижні.
+  const demand = new Map<string, number>();
+  for (const k of ["done", "arrived", "transit", "ttn", "waiting"] as Bucket[]) {
+    for (const [size, n] of byState.get(k) ?? []) demand.set(size, (demand.get(size) ?? 0) + n);
+  }
+  const top = [...demand].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  if (top.length) out.push("", `<b>Найбільше замовляють (${DAYS} дн.):</b> ${top.map(([size, n]) => `${esc(size)}-${n}`).join(", ")}`);
+  const advice: string[] = [];
+  for (const [size, n] of [...demand].sort(bySizeNum)) {
+    const need = Math.ceil((n * 14) / DAYS);
+    const have = (stock.get(size) ?? 0) + (byState.get("refused")?.get(size) ?? 0);
+    if (n >= 2 && have < need) advice.push(`${esc(size)}: на 2 тижні треба ~${need}, є ${have}`);
+  }
+  out.push(advice.length ? `<b>Варто дозамовити:</b>\n${advice.map((a) => `• ${a}`).join("\n")}` : "<b>Дозамовляти поки не треба.</b>");
+  out.push("", `«На складі» — вільний залишок на складі «Основний» у KeyCRM (без резерву під замовлення). «Варто дозамовити» рахую так: склад + відмови, що повертаються, проти того, скільки цього розміру зазвичай замовляють за 2 тижні.`);
   return out.join("\n");
 }
