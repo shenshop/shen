@@ -9,12 +9,14 @@ import { createManualOrder, parseManualOrder } from "./manual-order";
 import { autoSendPickups, autoSendTtns } from "./shop-bot-jobs";
 import { createNewProduct, findProduct, groupPhotos, MAX_PHOTOS, parseNewProduct, photoUpdateSku, photoUrl, replacePhotos } from "./new-product";
 import { formatPrice } from "./format";
+import { DAYS, modelKey, modelList, sizeReport } from "./size-report";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
 export const TTN_BUTTON = "📮 ТТН клієнтам";
 export const REFRESH_BUTTON = "🔄 Оновити сайт";
 export const REFUSALS_BUTTON = "↩️ Відмови";
 export const PICKUP_BUTTON = "📬 Не забрали";
+export const SIZES_BUTTON = "👟 Розміри по моделі";
 // Кнопки списку ТТН для Дрона за статусом KeyCRM.
 export const STATUS_BUTTONS: Record<string, StatusListId> = {
   "🚚 Передано в доставку": 8,
@@ -26,7 +28,7 @@ export const KEYBOARD = {
     [{ text: CHECK_BUTTON }, { text: TTN_BUTTON }],
     Object.keys(STATUS_BUTTONS).map((text) => ({ text })),
     [{ text: REFUSALS_BUTTON }, { text: PICKUP_BUTTON }],
-    [{ text: REFRESH_BUTTON }],
+    [{ text: SIZES_BUTTON }, { text: REFRESH_BUTTON }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -422,4 +424,18 @@ export async function handlePhotoReplace(caption: string, group: string, origin:
       `На сайті оновиться протягом години, або одразу після «${REFRESH_BUTTON}».`,
     ].filter((l, i, a) => l !== "" || a[i - 1] !== "").join("\n"),
   );
+}
+
+// «Розміри по моделі»: спершу кнопки з моделями, потім звіт по розмірах обраної.
+export async function handleSizeModels() {
+  const list = await modelList();
+  if (!list.length) return send(`👟 За ${DAYS} днів замовлень немає.`);
+  const buttons = list.map((m) => ({ text: `${m.model} (${m.n})`, callback_data: `sz:${modelKey(m.model)}` }));
+  const keyboard: (typeof buttons)[] = [];
+  for (let i = 0; i < buttons.length; i += 2) keyboard.push(buttons.slice(i, i + 2));
+  await send(`👟 Оберіть модель (у дужках — пар замовлено за ${DAYS} днів):`, { reply_markup: { inline_keyboard: keyboard } });
+}
+
+export async function handleSizeReport(key: string) {
+  await send(await sizeReport(key));
 }

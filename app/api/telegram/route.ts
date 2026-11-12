@@ -6,7 +6,7 @@ import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
 import { relayOwnerReply } from "@/lib/shop-bot";
 import { looksLikeProduct, photoUpdateSku, rememberPhoto } from "@/lib/new-product";
-import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleTtnList, STATUS_BUTTONS, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleSizeModels, handleSizeReport, handleTtnList, STATUS_BUTTONS, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, SIZES_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +45,10 @@ export async function POST(req: Request) {
     if (cb) {
       await telegram("answerCallbackQuery", { callback_query_id: cb.id });
       if (cb.data === "noop") return NextResponse.json({ ok: true });
+      if (cb.data?.startsWith("sz:")) {
+        await handleSizeReport(cb.data.slice(3));
+        return NextResponse.json({ ok: true });
+      }
       // Кнопки причини відмови не прибираємо: повідомлення лишається, щоб можна було ще написати клієнту.
       const why = cb.data?.match(/^why:(\d+):(\w+)$/);
       if (why) {
@@ -127,6 +131,7 @@ export async function POST(req: Request) {
       else if (looksLikeOrder(text)) await handleManualPreview(text, update.message!.message_id);
       else if (text === PICKUP_BUTTON || text.startsWith("/nezabraly")) await handlePickups(new URL(req.url).origin);
       else if (text === REFRESH_BUTTON || text.startsWith("/refresh")) await handleRefresh();
+      else if (text === SIZES_BUTTON || text.startsWith("/rozmiry")) await handleSizeModels();
       // Схоже на замовлення, але телефон не впізнано: не мовчимо.
       else if (text.split("\n").length >= 2 || /\d{5,}/.test(text)) {
         await telegram("sendMessage", {
