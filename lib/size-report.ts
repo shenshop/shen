@@ -139,32 +139,28 @@ export async function sizeReport(key: string) {
 
   const out = [`👟 <b>${esc(name)}</b>`, ""];
   out.push(`<b>На складі:</b> ${stock.size ? sizesText(stock) : "немає"}`);
-  for (const k of KEYS) {
-    const m = byState.get(k);
-    if (!m?.size) continue;
-    out.push(`<b>${LABEL[k]}${k === "done" ? ` (за ${DAYS} днів)` : ""}:</b> ${sizesText(m)}`);
-    // Номери замовлень (крім «Забрали» — їх багато і вони вже не потрібні).
-    if (k !== "done") {
-      const nums = [...(ids.get(k) ?? [])].sort((a, b) => a - b).map((n) => `№ <code>${n}</code>`);
-      out.push(`   ${nums.join(", ")}`);
-    }
+  const atBranch = byState.get("arrived");
+  if (atBranch?.size) {
+    const nums = [...(ids.get("arrived") ?? [])].sort((x, y) => x - y).map((n) => `№ <code>${n}</code>`);
+    out.push(`<b>У відділенні (ще не забрали):</b> ${sizesText(atBranch)}`, `   ${nums.join(", ")}`);
   }
-  // Попит за DAYS днів: усі пари, крім відмов. Вистачить = склад + відмови, що повертаються.
-  // Радимо дозамовити, якщо цього менше, ніж зазвичай продається за 2 тижні.
-  const demand = new Map<string, number>();
-  for (const k of ["done", "arrived", "transit", "ttn", "waiting"] as Bucket[]) {
-    for (const [size, n] of byState.get(k) ?? []) demand.set(size, (demand.get(size) ?? 0) + n);
-  }
-  const top = [...demand].sort((a, b) => b[1] - a[1]).slice(0, 5);
-  if (top.length) out.push("", `<b>Найбільше замовляють (${DAYS} дн.):</b> ${top.map(([size, n]) => `${esc(size)}-${n}`).join(", ")}`);
+
+  // Скільки замовляли кожен розмір за DAYS днів (усі, крім скасованих) — щоб бачити, що популярніше.
+  const ordered = new Map<string, number>();
+  for (const m of byState.values()) for (const [size, n] of m) ordered.set(size, (ordered.get(size) ?? 0) + n);
+  const popular = [...ordered].sort((x, y) => y[1] - x[1] || bySizeNum(x, y));
+  out.push("", `<b>Замовлень за ${DAYS} днів:</b> ${popular.map(([size, n]) => `${esc(size)}-${n}`).join(", ") || "немає"}`);
+
+  // Дозамовити: попит (замовлення без відмов) на 2 тижні проти складу + відмов, що повертаються.
   const advice: string[] = [];
-  for (const [size, n] of [...demand].sort(bySizeNum)) {
-    const need = Math.ceil((n * 14) / DAYS);
+  for (const [size, n] of [...ordered].sort(bySizeNum)) {
+    const sold = n - (byState.get("refused")?.get(size) ?? 0);
+    const need = Math.ceil((sold * 14) / DAYS);
     const have = (stock.get(size) ?? 0) + (byState.get("refused")?.get(size) ?? 0);
-    if (n >= 2 && have < need) advice.push(`${esc(size)}: на 2 тижні треба ~${need}, є ${have}`);
+    if (sold >= 2 && have < need) advice.push(`${esc(size)}-${need - have}`);
   }
-  out.push(advice.length ? `<b>Варто дозамовити:</b>\n${advice.map((a) => `• ${a}`).join("\n")}` : "<b>Дозамовляти поки не треба.</b>");
-  out.push("", `«На складі» — вільний залишок на складі «Основний» у KeyCRM (без резерву під замовлення). «Варто дозамовити» рахую так: склад + відмови, що повертаються, проти того, скільки цього розміру зазвичай замовляють за 2 тижні.`);
+  out.push(advice.length ? `<b>Дозамовити:</b> ${advice.join(", ")}` : "<b>Дозамовляти поки не треба.</b>");
+  out.push("", `Дозамовити = скільки розміру зазвичай замовляють за 2 тижні мінус те, що є на складі.`);
   return out.join("\n");
 }
 
