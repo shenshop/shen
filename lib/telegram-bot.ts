@@ -9,7 +9,7 @@ import { createManualOrder, parseManualOrder } from "./manual-order";
 import { autoSendPickups, autoSendTtns } from "./shop-bot-jobs";
 import { createNewProduct, findProduct, groupPhotos, MAX_PHOTOS, parseNewProduct, photoUpdateSku, photoUrl, replacePhotos } from "./new-product";
 import { formatPrice } from "./format";
-import { DAYS, modelKey, modelList, sizeReport } from "./size-report";
+import { DAYS, modelKey, modelList, restockAll, sizeReport } from "./size-report";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
 export const TTN_BUTTON = "📮 ТТН клієнтам";
@@ -17,6 +17,7 @@ export const REFRESH_BUTTON = "🔄 Оновити сайт";
 export const REFUSALS_BUTTON = "↩️ Відмови";
 export const PICKUP_BUTTON = "📬 Не забрали";
 export const SIZES_BUTTON = "👟 Розміри по моделі";
+export const RESTOCK_BUTTON = "🛒 Що дозамовити";
 // Кнопки списку ТТН для Дрона за статусом KeyCRM.
 export const STATUS_BUTTONS: Record<string, StatusListId> = {
   "🚚 Передано в доставку": 8,
@@ -28,7 +29,8 @@ export const KEYBOARD = {
     [{ text: CHECK_BUTTON }, { text: TTN_BUTTON }],
     Object.keys(STATUS_BUTTONS).map((text) => ({ text })),
     [{ text: REFUSALS_BUTTON }, { text: PICKUP_BUTTON }],
-    [{ text: SIZES_BUTTON }, { text: REFRESH_BUTTON }],
+    [{ text: SIZES_BUTTON }, { text: RESTOCK_BUTTON }],
+    [{ text: REFRESH_BUTTON }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -438,4 +440,9 @@ export async function handleSizeModels() {
 
 export async function handleSizeReport(key: string) {
   await send(await sizeReport(key));
+}
+
+export async function handleRestock() {
+  await send("⏳ Рахую по всіх моделях, це може зайняти до хвилини…");
+  await send(await restockAll());
 }
