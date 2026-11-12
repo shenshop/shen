@@ -6,7 +6,7 @@ import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
 import { relayOwnerReply } from "@/lib/shop-bot";
 import { looksLikeProduct, photoUpdateSku, rememberPhoto } from "@/lib/new-product";
-import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleRestock, handleSizeModels, handleSizeReport, handleTtnList, STATUS_BUTTONS, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, RESTOCK_BUTTON, SIZES_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleSizeModels, handleSizeReport, handleTtnList, STATUS_BUTTONS, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, SIZES_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -132,7 +132,6 @@ export async function POST(req: Request) {
       else if (text === PICKUP_BUTTON || text.startsWith("/nezabraly")) await handlePickups(new URL(req.url).origin);
       else if (text === REFRESH_BUTTON || text.startsWith("/refresh")) await handleRefresh();
       else if (text === SIZES_BUTTON || text.startsWith("/rozmiry")) await handleSizeModels();
-      else if (text === RESTOCK_BUTTON || text.startsWith("/dozamovyty")) await handleRestock();
       // Схоже на замовлення, але телефон не впізнано: не мовчимо.
       else if (text.split("\n").length >= 2 || /\d{5,}/.test(text)) {
         await telegram("sendMessage", {
