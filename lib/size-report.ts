@@ -122,7 +122,7 @@ export async function sizeReport(key: string) {
   const sizes = [...bySize].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]) || a[0].localeCompare(b[0]));
   const lines = sizes.map(([size, r]) => {
     const parts = KEYS.filter((k) => r[k]).map((k) => {
-      const nums = [...(ids.get(`${size}|${k}`) ?? [])].sort((a, b) => a - b).map((n) => `№${n}`);
+      const nums = [...(ids.get(`${size}|${k}`) ?? [])].sort((a, b) => a - b).map((n) => `№ <code>${n}</code>`);
       return `${LABEL[k]} ${r[k]} (${nums.join(", ")})`;
     });
     return `<b>${esc(size)}</b> — ${parts.join(", ")}`;
