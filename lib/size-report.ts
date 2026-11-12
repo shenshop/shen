@@ -83,23 +83,43 @@ export async function modelList() {
   return [...count].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([model, n]) => ({ model, n }));
 }
 
-// Порядок і назви станів у звіті — текстом, щоб було зрозуміло без пояснень.
+// Вільний залишок на складі «Основний» (кількість мінус резерв) по кожному розміру моделі.
+type KStock = { id: number; sku?: string; warehouse?: { name: string; quantity: number; reserve: number }[] };
+async function stockBySize(key: string) {
+  const out = new Map<string, number>();
+  for (let page = 1; page <= 40; page++) {
+    const res = await request<Res<KStock>>(`/offers/stocks?filter[details]=true&limit=50&page=${page}`, fresh);
+    for (const st of rows(res)) {
+      const { model, size } = splitSku(st.sku ?? "");
+      if (!st.sku || modelKey(model) !== key) continue;
+      const wh = st.warehouse?.find((w) => /основн/i.test(w.name));
+      const free = wh ? Number(wh.quantity) - Number(wh.reserve || 0) : 0;
+      if (Number.isFinite(free) && free > 0) out.set(size, (out.get(size) ?? 0) + free);
+    }
+    if (Array.isArray(res) || !res.next_page_url) break;
+  }
+  return out;
+}
+
+// Стани в порядку показу, текстом.
 const LABEL: Record<Exclude<Bucket, "canceled">, string> = {
-  done: "забрали",
-  arrived: "у відділенні",
-  transit: "в дорозі",
-  ttn: "є ТТН",
-  waiting: "не відправлено",
-  refused: "відмова",
+  arrived: "У відділенні",
+  transit: "В дорозі",
+  ttn: "Є ТТН, ще не в дорозі",
+  waiting: "Замовлено, не відправлено",
+  refused: "Відмова, повертається",
+  done: "Забрали",
 };
 const KEYS = Object.keys(LABEL) as (keyof typeof LABEL)[];
+const bySizeNum = (a: [string, unknown], b: [string, unknown]) => parseFloat(a[0]) - parseFloat(b[0]) || a[0].localeCompare(b[0]);
+const sizesText = (m: Map<string, number>) => [...m].sort(bySizeNum).map(([size, n]) => `${esc(size)}-${n}`).join(", ");
 
-/** Звіт по одній моделі: рядок на розмір. */
+/** Звіт по одній моделі: залишок на складі і де зараз пари із замовлень, згруповано за станом. */
 export async function sizeReport(key: string) {
-  const { orders, bucket } = await load();
-  const bySize = new Map<string, Record<Bucket, number>>();
-  // Номери замовлень для кожного розміру і стану.
-  const ids = new Map<string, Set<number>>();
+  const [{ orders, bucket }, stock] = await Promise.all([load(), stockBySize(key)]);
+  // Стан → розмір → кількість, і номери замовлень для кожного стану.
+  const byState = new Map<Bucket, Map<string, number>>();
+  const ids = new Map<Bucket, Set<number>>();
   let name = key;
   for (const o of orders) {
     let b = bucket.get(o.status_id) ?? "waiting";
@@ -110,32 +130,25 @@ export async function sizeReport(key: string) {
       const { model, size } = splitSku(p.offer?.sku || p.name || "");
       if (modelKey(model) !== key) continue;
       name = model;
-      const r = bySize.get(size) ?? { done: 0, transit: 0, arrived: 0, refused: 0, canceled: 0, ttn: 0, waiting: 0 };
-      r[b] += p.quantity || 1;
-      bySize.set(size, r);
-      const k = `${size}|${b}`;
-      ids.set(k, (ids.get(k) ?? new Set()).add(o.id));
+      const m = byState.get(b) ?? new Map<string, number>();
+      m.set(size, (m.get(size) ?? 0) + (p.quantity || 1));
+      byState.set(b, m);
+      ids.set(b, (ids.get(b) ?? new Set()).add(o.id));
     }
   }
-  if (!bySize.size) return `👟 <b>${esc(name)}</b>: за ${DAYS} днів замовлень немає.`;
 
-  const sizes = [...bySize].sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]) || a[0].localeCompare(b[0]));
-  const lines = sizes.map(([size, r]) => {
-    const parts = KEYS.filter((k) => r[k]).map((k) => {
-      const nums = [...(ids.get(`${size}|${k}`) ?? [])].sort((a, b) => a - b).map((n) => `№ <code>${n}</code>`);
-      return `${LABEL[k]} ${r[k]} (${nums.join(", ")})`;
-    });
-    return `<b>${esc(size)}</b> — ${parts.join(", ")}`;
-  });
-  const sum = (k: Bucket) => sizes.reduce((s, [, r]) => s + r[k], 0);
-  const total = KEYS.filter((k) => sum(k)).map((k) => `${LABEL[k]} ${sum(k)}`);
-  return [
-    `👟 <b>${esc(name)}</b>, замовлення за ${DAYS} днів`,
-    "",
-    ...lines,
-    "",
-    `<b>Разом:</b> ${total.join(", ")}`,
-    "",
-    `«Відмова» — пара повернеться на склад. «Є ТТН» — накладна створена, але посилка ще не в дорозі. «Не відправлено» — без ТТН.`,
-  ].join("\n");
+  const out = [`👟 <b>${esc(name)}</b>`, ""];
+  out.push(`<b>На складі:</b> ${stock.size ? sizesText(stock) : "немає"}`);
+  for (const k of KEYS) {
+    const m = byState.get(k);
+    if (!m?.size) continue;
+    out.push(`<b>${LABEL[k]}${k === "done" ? ` (за ${DAYS} днів)` : ""}:</b> ${sizesText(m)}`);
+    // Номери замовлень (крім «Забрали» — їх багато і вони вже не потрібні).
+    if (k !== "done") {
+      const nums = [...(ids.get(k) ?? [])].sort((a, b) => a - b).map((n) => `№ <code>${n}</code>`);
+      out.push(`   ${nums.join(", ")}`);
+    }
+  }
+  out.push("", `«На складі» — вільний залишок на складі «Основний» у KeyCRM (без резерву під замовлення). Замовлення — за останні ${DAYS} днів.`);
+  return out.join("\n");
 }
