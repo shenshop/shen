@@ -23,6 +23,8 @@ export type Bucket = "done" | "transit" | "arrived" | "refused" | "canceled" | "
 // Статус → що сталося з парою. Спершу відмову, бо «Відмова від отримання» теж містить «отриман».
 export function bucketOf(s: Named): Bucket {
   const n = s.name.trim().toLowerCase();
+  // Статуси Lurex — окремий бізнес, у звіт по взуттю не беремо.
+  if (/lurex/.test(n)) return "canceled";
   if (/відмов|поверн|return/.test(n)) return "refused";
   if (/скасов|відмін|cancel|дубл|спам|тест|немає в наявн|нема в наявн|немає зв|нема зв|не відпов|недозвон/.test(n)) return "canceled";
   if (/прибул|прибув|у відділен|в відділен/.test(n)) return "arrived";
