@@ -12,13 +12,14 @@ type Named = { id: number; name: string; alias?: string; is_closing_order?: bool
 type KOrder = {
   id: number;
   status_id: number;
+  shipping?: { tracking_code?: string | null } | null;
   products?: { name?: string; quantity?: number; offer?: { sku?: string } | null }[] | null;
 };
 type Res<T> = T[] | { data: T[]; next_page_url?: string | null };
 const rows = <T>(r: Res<T>) => (Array.isArray(r) ? r : r.data);
 const fresh = { cache: "no-store" as const };
 
-export type Bucket = "done" | "transit" | "arrived" | "refused" | "canceled" | "waiting";
+export type Bucket = "done" | "transit" | "arrived" | "refused" | "canceled" | "ttn" | "waiting";
 
 // Статус → що сталося з парою. Спершу відмову, бо «Відмова від отримання» теж містить «отриман».
 export function bucketOf(s: Named): Bucket {
@@ -52,7 +53,7 @@ async function load() {
   const orders: KOrder[] = [];
   for (let page = 1; page <= 20; page++) {
     const res = await request<Res<KOrder>>(
-      `/order?filter[created_between]=${range}&include=products.offer&sort=-id&limit=50&page=${page}`,
+      `/order?filter[created_between]=${range}&include=products.offer,shipping&sort=-id&limit=50&page=${page}`,
       fresh,
     );
     orders.push(...rows(res));
@@ -85,6 +86,7 @@ export async function modelList() {
 const ICON: Record<Exclude<Bucket, "canceled">, string> = {
   done: "✅",
   transit: "🚚",
+  ttn: "📦",
   arrived: "🏤",
   refused: "↩️",
   waiting: "⏳",
@@ -96,13 +98,15 @@ export async function sizeReport(key: string) {
   const bySize = new Map<string, Record<Bucket, number>>();
   let name = key;
   for (const o of orders) {
-    const b = bucket.get(o.status_id) ?? "waiting";
+    let b = bucket.get(o.status_id) ?? "waiting";
     if (b === "canceled") continue;
+    // ТТН уже створено, а статус ще не «в дорозі»: пара фактично відправляється.
+    if (b === "waiting" && o.shipping?.tracking_code?.trim()) b = "ttn";
     for (const p of o.products ?? []) {
       const { model, size } = splitSku(p.offer?.sku || p.name || "");
       if (modelKey(model) !== key) continue;
       name = model;
-      const r = bySize.get(size) ?? { done: 0, transit: 0, arrived: 0, refused: 0, canceled: 0, waiting: 0 };
+      const r = bySize.get(size) ?? { done: 0, transit: 0, arrived: 0, refused: 0, canceled: 0, ttn: 0, waiting: 0 };
       r[b] += p.quantity || 1;
       bySize.set(size, r);
     }
@@ -121,9 +125,9 @@ export async function sizeReport(key: string) {
     "",
     ...lines,
     "",
-    `Разом: ✅ забрали ${sum("done")} · 🚚 в дорозі ${sum("transit")} · 🏤 у відділенні ${sum("arrived")} · ↩️ відмова ${sum("refused")} · ⏳ ще не відправлено ${sum("waiting")}`,
+    `Разом: ✅ забрали ${sum("done")} · 📦 є ТТН ${sum("ttn")} · 🚚 в дорозі ${sum("transit")} · 🏤 у відділенні ${sum("arrived")} · ↩️ відмова ${sum("refused")} · ⏳ ще не відправлено ${sum("waiting")}`,
     "",
-    `↩️ відмова: пара повернеться на склад. ⏳: нове, виготовляється або чекає відправки.`,
+    `↩️ відмова: пара повернеться на склад. 📦: ТТН створено, ще не в дорозі. ⏳: без ТТН (нове, виготовляється, чекає відправки).`,
     `✅ рахую статуси: ${esc(doneNames.join(", ") || "—")}`,
   ].join("\n");
 }
