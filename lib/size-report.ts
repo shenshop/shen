@@ -23,11 +23,13 @@ export type Bucket = "done" | "transit" | "arrived" | "refused" | "canceled" | "
 // Статус → що сталося з парою. Спершу відмову, бо «Відмова від отримання» теж містить «отриман».
 export function bucketOf(s: Named): Bucket {
   const n = s.name.trim().toLowerCase();
-  if (/відмов|поверн/.test(n)) return "refused";
-  if (/скасов|відмін|дубл|спам|тест/.test(n)) return "canceled";
+  if (/відмов|поверн|return/.test(n)) return "refused";
+  if (/скасов|відмін|cancel|дубл|спам|тест|немає в наявн|нема в наявн|немає зв|нема зв|не відпов|недозвон/.test(n)) return "canceled";
   if (/прибул|прибув|у відділен|в відділен/.test(n)) return "arrived";
   if (/дороз|передано|відправлен|доставляєт/.test(n)) return "transit";
-  if (/викон|отриман|забра|оплачен|заверш|успіш/.test(n) || s.is_closing_order) return "done";
+  if (/викон|отриман|забра|оплачен|заверш|успіш|complet/.test(n)) return "done";
+  // Інші закриті статуси (без продажу) не рахуємо, щоб не вважати їх викупленими.
+  if (s.is_closing_order) return "canceled";
   return "waiting";
 }
 
