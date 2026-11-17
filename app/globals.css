@@ -288,9 +288,21 @@ legend { font-weight: 700; font-size: 20px; margin-bottom: 12px; padding: 0; }
 
 /* Телефон: трохи дрібніший масштаб, щоб на екран вміщалось більше. */
 @media (max-width: 899px) {
-  .header-inner { height: 56px; }
-  .logo { font-size: 19px; }
+  .header-inner { height: 50px; }
+  .logo { font-size: 16px; letter-spacing: .22em; }
+  .header-inner .logo { padding-left: .22em; }
   h1 { font-size: clamp(24px, 6vw, 40px); }
+  /* Головний блок: фото повністю (без обрізання), текст і кнопки компактніші. */
+  .hero { padding: 12px 0 0; }
+  .hero-inner { gap: 16px; }
+  .hero-photo { aspect-ratio: 5 / 4; border-radius: 18px; }
+  .hero-photo img { object-fit: contain; }
+  .hero-caption { font-size: 14px; }
+  .hero-dots { margin-top: 6px; }
+  .hero h1 { font-size: 22px; margin-bottom: 8px; }
+  .hero .eyebrow { font-size: 10px; margin: 0 0 6px; }
+  .hero .lead { font-size: 15px; margin: 0 0 12px; }
+  .hero-actions .btn { min-height: 42px; font-size: 14px; flex: 1; }
   .page-title { font-size: clamp(22px, 5vw, 32px); }
   .product-info h1 { font-size: 19px; line-height: 1.25; letter-spacing: -0.01em; }
   .product-price { font-size: 21px; margin-bottom: 14px; }
@@ -310,7 +322,7 @@ legend { font-weight: 700; font-size: 20px; margin-bottom: 12px; padding: 0; }
 .chat-hint { padding: 4px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 12px; font-weight: 600; box-shadow: 0 4px 14px rgba(0, 0, 0, .12); white-space: nowrap; }
 .chat-icon { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; box-shadow: 0 6px 18px rgba(0, 0, 0, .22); transition: transform .15s; }
 .chat-icon:hover { transform: scale(1.08); }
-@media (max-width: 899px) { .chat-icon { width: 48px; height: 48px; } .chat-hint { font-size: 11px; } }
+@media (max-width: 899px) { .chat-fab { gap: 8px; right: 10px; } .chat-icon { width: 42px; height: 42px; } .chat-icon svg { width: 22px; height: 22px; } .chat-hint { font-size: 11px; padding: 3px 8px; } }
 /* На сторінці товару внизу закріплена кнопка «Купити», тому піднімаємо чат над нею. */
 @media (max-width: 899px) { body:has(.sticky-buy) .chat-fab { bottom: calc(84px + env(safe-area-inset-bottom)); } }
 
