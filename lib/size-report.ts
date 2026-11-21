@@ -152,6 +152,24 @@ export async function sizeReport(key: string) {
     for (const [size, n] of m) sold.set(size, (sold.get(size) ?? 0) + n);
   }
   const popular = [...sold].sort((x, y) => y[1] - x[1] || bySizeNum(x, y));
-  out.push("", `<b>Замовляли за ${DAYS} днів:</b> ${popular.map(([size, n]) => `${esc(size)}-${n}`).join(", ") || "немає"}`);
+  const total = popular.reduce((sum, [, n]) => sum + n, 0);
+  out.push("", `<b>Замовили за ${DAYS} днів:</b> ${total} пар`);
+  if (popular.length) {
+    out.push(popular.map(([size, n]) => `${esc(size)}-${n}`).join(", "));
+    // Найходовіші — три перші розміри; порада: скільки їх розходиться за 2 тижні мінус склад.
+    const top = popular.slice(0, 3).filter(([, n]) => n >= 2);
+    if (top.length) {
+      out.push("", `<b>Найбільше беруть:</b> ${top.map(([size, n]) => `${esc(size)} (${n})`).join(", ")}`);
+      const add = top
+        .map(([size, n]) => [size, Math.ceil((n * 14) / DAYS) - (stock.get(size) ?? 0)] as const)
+        .filter(([, k]) => k > 0);
+      out.push(
+        add.length
+          ? `<b>Порада добрати:</b> ${add.map(([size, k]) => `${esc(size)}-${k}`).join(", ")}`
+          : "<b>Порада:</b> цих розмірів на складі поки вистачає.",
+        `<i>Порада = скільки пар розміру розходиться за 2 тижні мінус те, що є на складі.</i>`,
+      );
+    }
+  }
   return out.join("\n");
 }
