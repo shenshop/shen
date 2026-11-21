@@ -152,6 +152,6 @@ export async function sizeReport(key: string) {
     for (const [size, n] of m) sold.set(size, (sold.get(size) ?? 0) + n);
   }
   const popular = [...sold].sort((x, y) => y[1] - x[1] || bySizeNum(x, y));
-  out.push("", `<b>Продано за ${DAYS} днів (без відмов):</b> ${popular.map(([size, n]) => `${esc(size)}-${n}`).join(", ") || "немає"}`);
+  out.push("", `<b>Замовляли за ${DAYS} днів:</b> ${popular.map(([size, n]) => `${esc(size)}-${n}`).join(", ") || "немає"}`);
   return out.join("\n");
 }
