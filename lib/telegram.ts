@@ -10,6 +10,16 @@ export function telegramEnabled() {
 
 export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// «Чоловічі зимові кросівки з натуральної шкіри чорні 40-45» → «чоловічі зимові кросівки»:
+// обрізаємо назву після типу взуття, щоб текст клієнту був коротким.
+const SHOE_TYPE = /(кросівк\S*|кросовк\S*|кеди|кедів|черевик\S*|напівчеревик\S*|чобот\S*|ботинк\S*|туфл\S*|мокасин\S*|лофер\S*|сліпон\S*|сандал\S*|босоніжк\S*|снікер\S*|челсі|уггі|угги|тапк\S*|шльопанц\S*)/i;
+export function shortModel(name: string) {
+  const lower = name.charAt(0).toLowerCase() + name.slice(1);
+  const m = lower.match(SHOE_TYPE);
+  if (m?.index != null) return lower.slice(0, m.index + m[0].length).trim();
+  return lower.replace(/\s*\d{2}\s*[-–]\s*\d{2}\s*$/, "").trim();
+}
+
 export function orderMessage(order: OrderRequest, total: number, crmId: number | null) {
   const lines = [
     crmId != null
@@ -34,7 +44,7 @@ export function orderMessage(order: OrderRequest, total: number, crmId: number |
   // Готовий текст для уточнення розміру у Viber (натиснути, щоб скопіювати).
   const first = order.items[0];
   if (first) {
-    const model = first.name.charAt(0).toLowerCase() + first.name.slice(1);
+    const model = shortModel(first.name);
     const size = parseInt(first.size, 10);
     lines.push(
       "",
