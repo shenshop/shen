@@ -5,6 +5,7 @@ import { markRefusalDone } from "@/lib/refusals";
 import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
 import { relayOwnerReply } from "@/lib/shop-bot";
+import { handleSupplierAdd, handleSupplierDelete, handleSupplierDeleteAsk, handleSupplierHistory, handleSupplierPreview, handleSuppliers, handleSuppliersCsv, looksLikeSupplierEntry, SUPPLIERS_BUTTON } from "@/lib/suppliers";
 import { looksLikeProduct, photoUpdateSku, rememberPhoto } from "@/lib/new-product";
 import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleSizeModels, handleSizeReport, handleTtnList, STATUS_BUTTONS, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, SIZES_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
@@ -45,6 +46,12 @@ export async function POST(req: Request) {
     if (cb) {
       await telegram("answerCallbackQuery", { callback_query_id: cb.id });
       if (cb.data === "noop") return NextResponse.json({ ok: true });
+      // Постачальники: історія, файл, видалення запису (кнопки під повідомленням лишаються).
+      const sup = cb.data?.match(/^sup:(\d+)$/);
+      if (sup) return (await handleSupplierHistory(Number(sup[1])), NextResponse.json({ ok: true }));
+      if (cb.data === "supcsv") return (await handleSuppliersCsv(), NextResponse.json({ ok: true }));
+      const supdel = cb.data?.match(/^supdel:(\d+):(\d+)$/);
+      if (supdel) return (await handleSupplierDeleteAsk(Number(supdel[1]), Number(supdel[2])), NextResponse.json({ ok: true }));
       if (cb.data?.startsWith("sz:")) {
         await handleSizeReport(cb.data.slice(3));
         return NextResponse.json({ ok: true });
@@ -72,6 +79,13 @@ export async function POST(req: Request) {
               ? [[{ text: "✅ Написали клієнту", callback_data: "noop" }]]
               : [] },
         });
+      }
+      const supdelok = cb.data?.match(/^supdelok:(\d+):(\d+)$/);
+      if (supdelok) await handleSupplierDelete(Number(supdelok[1]), Number(supdelok[2]));
+      if (cb.data === "supadd") {
+        const original = cb.message?.reply_to_message?.text;
+        if (original) await handleSupplierAdd(original);
+        else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного повідомлення. Напишіть запис ще раз." });
       }
       if (cb.data === "mkorder") {
         const original = cb.message?.reply_to_message?.text;
@@ -127,6 +141,8 @@ export async function POST(req: Request) {
       else if (text === TTN_BUTTON || text.startsWith("/ttn")) await handleTtnList(new URL(req.url).origin);
       else if (Object.hasOwn(STATUS_BUTTONS, text)) await handleTtnList(new URL(req.url).origin, STATUS_BUTTONS[text]);
       else if (text === REFUSALS_BUTTON || text.startsWith("/vidmovy")) await handleRefusals(new URL(req.url).origin);
+      else if (text === SUPPLIERS_BUTTON || text.startsWith("/postachalnyky")) await handleSuppliers();
+      else if (looksLikeSupplierEntry(text)) await handleSupplierPreview(text, update.message!.message_id);
       else if (looksLikeProduct(text)) await handleProductPreview(text, update.message!.message_id, null);
       else if (looksLikeOrder(text)) await handleManualPreview(text, update.message!.message_id);
       else if (text === PICKUP_BUTTON || text.startsWith("/nezabraly")) await handlePickups(new URL(req.url).origin);

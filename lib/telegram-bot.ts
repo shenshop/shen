@@ -10,6 +10,7 @@ import { autoSendPickups, autoSendTtns } from "./shop-bot-jobs";
 import { createNewProduct, findProduct, groupPhotos, MAX_PHOTOS, parseNewProduct, photoUpdateSku, photoUrl, replacePhotos } from "./new-product";
 import { formatPrice } from "./format";
 import { DAYS, modelKey, modelList, sizeReport } from "./size-report";
+import { SUPPLIERS_BUTTON } from "./suppliers";
 
 export const CHECK_BUTTON = "📦 Перевірити склад";
 export const TTN_BUTTON = "📮 ТТН клієнтам";
@@ -28,7 +29,8 @@ export const KEYBOARD = {
     [{ text: CHECK_BUTTON }, { text: TTN_BUTTON }],
     Object.keys(STATUS_BUTTONS).map((text) => ({ text })),
     [{ text: REFUSALS_BUTTON }, { text: PICKUP_BUTTON }],
-    [{ text: SIZES_BUTTON }, { text: REFRESH_BUTTON }],
+    [{ text: SIZES_BUTTON }, { text: SUPPLIERS_BUTTON }],
+    [{ text: REFRESH_BUTTON }],
   ],
   resize_keyboard: true,
   is_persistent: true,
