@@ -160,13 +160,15 @@ export async function sizeReport(key: string) {
     const top = popular.slice(0, 3).filter(([, n]) => n >= 2);
     if (top.length) {
       out.push("", `<b>Найбільше беруть:</b> ${top.map(([size, n]) => `${esc(size)} (${n})`).join(", ")}`);
-      const add = top
+      // Порада — по всіх розмірах, які замовляли хоча б двічі.
+      const add = popular
+        .filter(([, n]) => n >= 2)
         .map(([size, n]) => [size, Math.ceil((n * 14) / DAYS) - (stock.get(size) ?? 0)] as const)
         .filter(([, k]) => k > 0);
       out.push(
         add.length
           ? `<b>Порада добрати:</b> ${add.map(([size, k]) => `${esc(size)}-${k}`).join(", ")}`
-          : "<b>Порада:</b> цих розмірів на складі поки вистачає.",
+          : "<b>Порада:</b> усіх розмірів на складі поки вистачає.",
         `<i>Порада = скільки пар розміру розходиться за 2 тижні мінус те, що є на складі.</i>`,
       );
     }
