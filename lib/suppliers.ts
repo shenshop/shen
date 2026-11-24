@@ -45,15 +45,20 @@ const weight = (t: Totals) => t.UAH + t.USD * 42;
 const KIND_WORD: Record<Kind, string> = { in: "Прихід", pay: "Оплата", start: "Борг на початок" };
 
 // «Прихід Іван cypress 10 пар 19500», «Оплата Іван 10000», «Борг Іван 25000» (борг, який уже був).
-const RE = /^\s*(прих[іi]д товару|прих[іi]д|взяв|оплата|оплатив|борг)\s+(.+?)\s+(\d{1,3}(?:[ \u00a0]\d{3})+|\d+)((?:[.,]\d{1,2})?)\s*(грн\.?|гривень|\$|дол\.?|долар[а-яіїє]*|usd|у\.?\s?о\.?)?\s*$/is;
+const RE = /^\s*(прих[іi]д товару|прих[іi]д|взяв|оплата|оплатив|заплатив|борг)\s+(.+?)\s+(\d{1,3}(?:[ \u00a0]\d{3})+|\d+)((?:[.,]\d{1,2})?)\s*(грн\.?|гривень|\$|дол\.?|долар[а-яіїє]*|usd|у\.?\s?о\.?)?\s*$/is;
 
 export type Draft = { kind: Kind; name: string; note: string; sum: number; cur: Cur };
 
+// Ім'я можна писати і перед словом: «Яворський оплатив 500$» = «Оплатив Яворський 500$».
+const KW = /^\s*(прих[іi]д товару|прих[іi]д|взяв|оплата|оплатив|заплатив|борг)\s/i;
+const NAME_FIRST = /^\s*(\S+)\s+(прих[іi]д товару|прих[іi]д|взяв|оплата|оплатив|заплатив|борг)\s+(.+)$/is;
+const normalize = (text: string) => (KW.test(text) ? text : text.replace(NAME_FIRST, "$2 $1 $3"));
+
 export function parseSupplierEntry(text: string, known: string[] = []): Draft | null {
-  const m = text.match(RE);
+  const m = normalize(text).match(RE);
   if (!m) return null;
   const word = m[1].toLowerCase();
-  const kind: Kind = word.startsWith("опла") ? "pay" : word === "борг" ? "start" : "in";
+  const kind: Kind = word.startsWith("опла") || word.startsWith("запла") ? "pay" : word === "борг" ? "start" : "in";
   const sum = Number(m[3].replace(/[\s\u00a0]/g, "") + (m[4] ? "." + m[4].slice(1) : ""));
   const cur: Cur = m[5] && !/^(грн|гривень)/i.test(m[5]) ? "USD" : "UAH";
   if (!(sum > 0)) return null;
@@ -68,7 +73,7 @@ export function parseSupplierEntry(text: string, known: string[] = []): Draft | 
 }
 
 export function looksLikeSupplierEntry(text: string) {
-  return /^\s*(прих[іi]д|взяв|оплата|оплатив|борг)\s/i.test(text) && !/\d{9,}/.test(text.replace(/[\s()+-]/g, ""));
+  return (KW.test(text) || NAME_FIRST.test(text)) && !/\d{9,}/.test(text.replace(/[\s()+-]/g, ""));
 }
 
 function find(b: Book, name: string) {
