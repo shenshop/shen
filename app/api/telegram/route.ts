@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { telegram } from "@/lib/telegram";
 import { seenUpdate } from "@/lib/tg-dedupe";
-import { markRefusalDone } from "@/lib/refusals";
+import { markRefusalDone, REASONS } from "@/lib/refusals";
 import { markReminded } from "@/lib/pickup-reminder";
 import { looksLikeOrder } from "@/lib/manual-order";
 import { relayOwnerReply } from "@/lib/shop-bot";
@@ -75,9 +75,18 @@ export async function POST(req: Request) {
           message_id: cb.message.message_id,
           reply_markup: { inline_keyboard: sent
             ? [[{ text: "✅ Надіслано клієнту", callback_data: "noop" }]]
-            : refused || reminded
-              ? [[{ text: "✅ Написали клієнту", callback_data: "noop" }]]
-              : [] },
+            : refused
+              // Причину клієнт пише пізніше, тож кнопки причини лишаємо.
+              ? [
+                  [{ text: "✅ Написали клієнту", callback_data: "noop" }],
+                  [
+                    ...Object.entries(REASONS).map(([code, label]) => ({ text: label, callback_data: `why:${refused[1]}:${code}` })),
+                    { text: "✍️ Своя", callback_data: `why:${refused[1]}:own` },
+                  ],
+                ]
+              : reminded
+                ? [[{ text: "✅ Написали клієнту", callback_data: "noop" }]]
+                : [] },
         });
       }
       const supdelok = cb.data?.match(/^supdelok:(\d+):(\d+)$/);
