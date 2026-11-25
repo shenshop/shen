@@ -25,16 +25,28 @@ export const STATUS_BUTTONS: Record<string, StatusListId> = {
   "🛣 У дорозі": 9,
   "🏤 Прибуло у відділення": 20,
 };
-export const KEYBOARD = {
-  keyboard: [
-    [{ text: CHECK_BUTTON }, { text: TTN_BUTTON }],
-    Object.keys(STATUS_BUTTONS).map((text) => ({ text })),
-    [{ text: REFUSALS_BUTTON }, { text: PICKUP_BUTTON }],
-    [{ text: SIZES_BUTTON }, { text: SUPPLIERS_BUTTON }],
-    [{ text: REFRESH_BUTTON }],
-  ],
+// Меню розділами: внизу 4 кнопки, «Замовлення» і «Доставка» відкривають свої кнопки, «Назад» повертає.
+export const ORDERS_SECTION = "📦 Замовлення";
+export const DELIVERY_SECTION = "🚚 Доставка";
+export const BACK_BUTTON = "⬅️ Назад";
+const kb = (rows: string[][]) => ({
+  keyboard: rows.map((r) => r.map((text) => ({ text }))),
   resize_keyboard: true,
   is_persistent: true,
+});
+export const KEYBOARD = kb([
+  [ORDERS_SECTION, DELIVERY_SECTION],
+  [REFUSALS_BUTTON, SUPPLIERS_BUTTON],
+]);
+export const SECTIONS: Record<string, { title: string; keyboard: ReturnType<typeof kb> }> = {
+  [ORDERS_SECTION]: {
+    title: "📦 Замовлення і склад",
+    keyboard: kb([[CHECK_BUTTON, SIZES_BUTTON], [REFRESH_BUTTON], [BACK_BUTTON]]),
+  },
+  [DELIVERY_SECTION]: {
+    title: "🚚 Доставка: ТТН і посилки",
+    keyboard: kb([[TTN_BUTTON], Object.keys(STATUS_BUTTONS), [PICKUP_BUTTON], [BACK_BUTTON]]),
+  },
 };
 
 // Секрет вебхука виводимо з токена бота, щоб не заводити ще одну змінну в Cloudflare.

@@ -7,7 +7,7 @@ import { looksLikeOrder } from "@/lib/manual-order";
 import { relayOwnerReply } from "@/lib/shop-bot";
 import { handleSupplierAdd, handleSupplierDelete, handleSupplierDeleteAsk, handleSupplierHistory, handleSupplierPreview, handleSuppliers, handleSuppliersCsv, looksLikeSupplierEntry, SUPPLIERS_BUTTON } from "@/lib/suppliers";
 import { looksLikeProduct, photoUpdateSku, rememberPhoto } from "@/lib/new-product";
-import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleSizeModels, handleSizeReport, handleTtnList, STATUS_BUTTONS, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, SIZES_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleSizeModels, handleSizeReport, handleTtnList, STATUS_BUTTONS, KEYBOARD, SECTIONS, BACK_BUTTON, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, SIZES_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -149,6 +149,10 @@ export async function POST(req: Request) {
       // /start лише повертає кнопки внизу чату (якщо чат очистили або кнопки згорнулись).
       if (text.startsWith("/start") || text.startsWith("/knopky")) {
         await telegram("sendMessage", { text: "Кнопки повернув 👇", reply_markup: KEYBOARD });
+      } else if (Object.hasOwn(SECTIONS, text)) {
+        await telegram("sendMessage", { text: SECTIONS[text].title, reply_markup: SECTIONS[text].keyboard });
+      } else if (text === BACK_BUTTON) {
+        await telegram("sendMessage", { text: "Головне меню", reply_markup: KEYBOARD });
       } else if (text === CHECK_BUTTON || text.startsWith("/sklad")) await handleCheck();
       else if (text === TTN_BUTTON || text.startsWith("/ttn")) await handleTtnList(new URL(req.url).origin);
       else if (Object.hasOwn(STATUS_BUTTONS, text)) await handleTtnList(new URL(req.url).origin, STATUS_BUTTONS[text]);
