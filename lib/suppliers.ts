@@ -80,8 +80,24 @@ function find(b: Book, name: string) {
   return b.suppliers.find((s) => s.name.toLowerCase() === name.toLowerCase());
 }
 
-export async function handleSupplierPreview(text: string, messageId: number) {
+// «Оплатив 500$» без імені: бот питає, кому, кнопками з постачальниками.
+const NO_NAME = new RegExp(KW.source + "\\s*(\\d[\\d \\u00a0.,]*)\\s*(грн\\.?|гривень|\\$|дол\\.?|долар[а-яіїє]*|usd)?\\s*$", "i");
+const withName = (text: string, name: string) => text.replace(KW, (m) => `${m.trimEnd()} ${name} `);
+
+export async function handleSupplierPreview(text: string, messageId: number, sid?: number) {
   const b = await load();
+  const picked = sid ? b.suppliers.find((x) => x.id === sid) : undefined;
+  if (picked) text = withName(text, picked.name);
+  else if (NO_NAME.test(text)) {
+    if (!b.suppliers.length) {
+      return telegram("sendMessage", { reply_to_message_id: messageId, text: "Кому? Напишіть з імʼям, напр. «Оплатив Яворський 500$»." });
+    }
+    const buttons = b.suppliers.map((x) => ({ text: x.name, callback_data: `suppick:${x.id}` }));
+    const keyboard: (typeof buttons)[] = [];
+    for (let i = 0; i < buttons.length; i += 2) keyboard.push(buttons.slice(i, i + 2));
+    keyboard.push([{ text: "Скасувати", callback_data: "cancel" }]);
+    return telegram("sendMessage", { reply_to_message_id: messageId, text: "Якому постачальнику?", reply_markup: { inline_keyboard: keyboard } });
+  }
   const d = parseSupplierEntry(text, b.suppliers.map((s) => s.name));
   if (!d) {
     return telegram("sendMessage", {
@@ -103,12 +119,14 @@ export async function handleSupplierPreview(text: string, messageId: number) {
       "",
       "Записати?",
     ].join("\n"),
-    reply_markup: { inline_keyboard: [[{ text: "✅ Записати", callback_data: "supadd" }, { text: "Ні", callback_data: "cancel" }]] },
+    reply_markup: { inline_keyboard: [[{ text: "✅ Записати", callback_data: picked ? `supadd:${picked.id}` : "supadd" }, { text: "Ні", callback_data: "cancel" }]] },
   });
 }
 
-export async function handleSupplierAdd(text: string) {
+export async function handleSupplierAdd(text: string, sid?: number) {
   const b = await load();
+  const picked = sid ? b.suppliers.find((x) => x.id === sid) : undefined;
+  if (picked) text = withName(text, picked.name);
   const d = parseSupplierEntry(text, b.suppliers.map((s) => s.name));
   if (!d) return telegram("sendMessage", { text: "⚠️ Не зрозумів запис. Напишіть ще раз." });
   let s = find(b, d.name);

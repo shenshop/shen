@@ -82,9 +82,12 @@ export async function POST(req: Request) {
       }
       const supdelok = cb.data?.match(/^supdelok:(\d+):(\d+)$/);
       if (supdelok) await handleSupplierDelete(Number(supdelok[1]), Number(supdelok[2]));
-      if (cb.data === "supadd") {
-        const original = cb.message?.reply_to_message?.text;
-        if (original) await handleSupplierAdd(original);
+      const suppick = cb.data?.match(/^suppick:(\d+)$/);
+      const original = cb.message?.reply_to_message;
+      if (suppick && original?.text && original.message_id) await handleSupplierPreview(original.text, original.message_id, Number(suppick[1]));
+      const supadd = cb.data?.match(/^supadd(?::(\d+))?$/);
+      if (supadd) {
+        if (original?.text) await handleSupplierAdd(original.text, supadd[1] ? Number(supadd[1]) : undefined);
         else await telegram("sendMessage", { text: "⚠️ Не бачу вихідного повідомлення. Напишіть запис ще раз." });
       }
       if (cb.data === "mkorder") {
