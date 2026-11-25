@@ -1,5 +1,6 @@
 import "server-only";
 import { revalidatePath, revalidateTag } from "next/cache";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveNewOrder, moveOrders, type PlannedOrder } from "./stock-check";
 import { customerText, markSent, messengerButtons, ordersToNotify, stats, STATUS_LISTS, type StatusListId } from "./ttn-notify";
@@ -205,7 +206,25 @@ export async function handleRefusals(origin: string) {
   const { list, statuses } = await refusals();
   if (!list.length) return send(`↩️ Нових відмов немає (статуси: ${esc(statuses.join(", "))}).`);
   await send(`↩️ <b>Відмови від отримання: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber, Telegram або WhatsApp і вставте.`);
-  for (const r of list) {
+  for (const r of list) await sendRefusal(r, origin);
+}
+
+// Кожні 15 хвилин: нові «Відмова від отримання» бот надсилає сам, кожну один раз.
+// Вночі (22:00–8:00 за Києвом) не турбуємо: вони прийдуть зранку.
+export async function autoRefusals(origin: string) {
+  const hour = Number(new Date().toLocaleString("en-GB", { timeZone: "Europe/Kyiv", hour: "2-digit", hour12: false }));
+  if (hour < 8 || hour >= 22) return;
+  const { list } = await refusals(24);
+  const kv = (getCloudflareContext().env as unknown as { NEXT_INC_CACHE_KV: { get(k: string): Promise<string | null>; put(k: string, v: string, o?: { expirationTtl?: number }): Promise<void> } }).NEXT_INC_CACHE_KV;
+  const fresh: typeof list = [];
+  for (const r of list) if (!(await kv.get(`refusal:auto:${r.id}`))) fresh.push(r);
+  if (!fresh.length) return;
+  for (const r of fresh) await kv.put(`refusal:auto:${r.id}`, "1", { expirationTtl: 60 * 60 * 24 * 30 });
+  await send(`↩️ <b>Нова відмова від отримання${fresh.length > 1 ? `: ${fresh.length}` : ""}</b>\nНапишіть клієнту, чому відмовився.`);
+  for (const r of fresh) await sendRefusal(r, origin);
+}
+
+async function sendRefusal(r: Awaited<ReturnType<typeof refusals>>["list"][number], origin: string) {
     await send(
       `<b>№${r.id}</b>${r.buyer ? ` · ${esc(r.buyer)}` : ""}\n📞 <code>${esc(r.phone)}</code>${r.items ? `\n👟 ${esc(r.items)}` : ""}\n\n<code>${esc(refusalText)}</code>`,
       {
@@ -221,7 +240,6 @@ export async function handleRefusals(origin: string) {
         },
       },
     );
-  }
 }
 
 // Посилки, що лежать у відділенні з 3-го дня. quiet: щоденна перевірка мовчить, коли список порожній.

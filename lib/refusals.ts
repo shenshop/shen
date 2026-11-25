@@ -37,7 +37,7 @@ async function doneTagId() {
   return id;
 }
 
-export async function refusals(): Promise<{ list: Refusal[]; statuses: string[] }> {
+export async function refusals(hours = RECENT_HOURS): Promise<{ list: Refusal[]; statuses: string[] }> {
   const all = rows(await request<List<Named>>("/order/status?limit=50", fresh));
   const matched = all.filter((s) => REFUSAL_STATUS.test(s.name.trim()));
   if (!matched.length) {
@@ -51,7 +51,7 @@ export async function refusals(): Promise<{ list: Refusal[]; statuses: string[] 
       fresh,
     ),
   );
-  const since = Date.now() - RECENT_HOURS * 3600_000;
+  const since = Date.now() - hours * 3600_000;
   const list = orders
     .filter((o) => o.buyer?.phone && !(o.tags ?? []).some((t) => t.id === tagId))
     .filter((o) => {
