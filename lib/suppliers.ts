@@ -11,7 +11,7 @@ const KEY = "suppliers:v1";
 
 export type Kind = "in" | "pay" | "start";
 export type Cur = "UAH" | "USD";
-export type Entry = { id: number; date: string; kind: Kind; sum: number; note: string; cur?: Cur };
+export type Entry = { id: number; date: string; kind: Kind; sum: number; note: string; cur?: Cur; time?: string };
 export type Supplier = { id: number; name: string; entries: Entry[] };
 type Book = { next: number; suppliers: Supplier[] };
 
@@ -23,6 +23,7 @@ async function load(): Promise<Book> {
 }
 const save = (b: Book) => kv().put(KEY, JSON.stringify(b));
 
+const nowTime = () => new Date().toLocaleTimeString("uk-UA", { timeZone: "Europe/Kyiv", hour: "2-digit", minute: "2-digit" });
 const today = () => new Date().toLocaleDateString("uk-UA", { timeZone: "Europe/Kyiv", day: "2-digit", month: "2-digit", year: "numeric" });
 const CUR_SIGN: Record<Cur, string> = { UAH: "грн", USD: "$" };
 const money = (n: number, cur: Cur = "UAH") =>
@@ -134,7 +135,7 @@ export async function handleSupplierAdd(text: string, sid?: number) {
     s = { id: b.next++, name: d.name, entries: [] };
     b.suppliers.push(s);
   }
-  s.entries.push({ id: b.next++, date: today(), kind: d.kind, sum: d.sum, note: d.note, cur: d.cur });
+  s.entries.push({ id: b.next++, date: today(), time: nowTime(), kind: d.kind, sum: d.sum, note: d.note, cur: d.cur });
   await save(b);
   await telegram("sendMessage", {
     parse_mode: "HTML",
@@ -172,7 +173,7 @@ export async function handleSupplierHistory(id: number) {
   const run: Totals = { UAH: 0, USD: 0 };
   const rows = s.entries.map((e) => {
     run[e.cur ?? "UAH"] += sign(e);
-    return `${e.date.slice(0, 5)} ${KIND_WORD[e.kind]}${e.note ? ` ${esc(e.note)}` : ""}: ${e.kind === "pay" ? "−" : "+"}${money(e.sum, e.cur)} → ${moneyT(run)}`;
+    return `${e.date.slice(0, 5)}${e.time ? ` ${e.time}` : ""} ${KIND_WORD[e.kind]}${e.note ? ` ${esc(e.note)}` : ""}: ${e.kind === "pay" ? "−" : "+"}${money(e.sum, e.cur)} → ${moneyT(run)}`;
   });
   // Telegram обмежує повідомлення 4096 символами: показуємо останні записи.
   const shown = rows.slice(-60);
@@ -200,7 +201,7 @@ export async function handleSupplierDeleteAsk(sid: number, eid: number) {
   if (!s || !e) return telegram("sendMessage", { text: "Запис уже видалено." });
   await telegram("sendMessage", {
     parse_mode: "HTML",
-    text: `Видалити запис?\n${esc(s.name)}, ${e.date} ${KIND_WORD[e.kind]}${e.note ? ` ${esc(e.note)}` : ""}: ${money(e.sum, e.cur)}`,
+    text: `Видалити запис?\n${esc(s.name)}, ${e.date}${e.time ? ` ${e.time}` : ""} ${KIND_WORD[e.kind]}${e.note ? ` ${esc(e.note)}` : ""}: ${money(e.sum, e.cur)}`,
     reply_markup: { inline_keyboard: [[{ text: "Так, видалити", callback_data: `supdelok:${sid}:${eid}` }, { text: "Ні", callback_data: "cancel" }]] },
   });
 }
@@ -218,17 +219,17 @@ export async function handleSupplierDelete(sid: number, eid: number) {
 // Файл для Excel: CSV з «;» і BOM, щоб українські літери й колонки відкрились правильно.
 export function suppliersCsv(b: Book) {
   const q = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
-  const out = [["Постачальник", "Дата", "Що", "Опис", "Валюта", "Взяв на", "Оплатив", "Борг після (ця валюта)"].map(q).join(";")];
+  const out = [["Постачальник", "Дата", "Час", "Що", "Опис", "Валюта", "Взяв на", "Оплатив", "Борг після (ця валюта)"].map(q).join(";")];
   for (const s of b.suppliers) {
     const run: Totals = { UAH: 0, USD: 0 };
     for (const e of s.entries) {
       const cur = e.cur ?? "UAH";
       run[cur] += sign(e);
-      out.push([s.name, e.date, KIND_WORD[e.kind], e.note, CUR_SIGN[cur], e.kind === "pay" ? "" : e.sum, e.kind === "pay" ? e.sum : "", run[cur]].map(q).join(";"));
+      out.push([s.name, e.date, e.time ?? "", KIND_WORD[e.kind], e.note, CUR_SIGN[cur], e.kind === "pay" ? "" : e.sum, e.kind === "pay" ? e.sum : "", run[cur]].map(q).join(";"));
     }
   }
   const total = b.suppliers.reduce((t, s) => addT(t, debt(s)), { UAH: 0, USD: 0 });
-  out.push("", [q("Разом борг"), "", "", "", "", "", "", q(moneyT(total))].join(";"));
+  out.push("", [q("Разом борг"), "", "", "", "", "", "", "", q(moneyT(total))].join(";"));
   return "﻿" + out.join("\r\n");
 }
 
