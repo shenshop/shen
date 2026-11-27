@@ -144,6 +144,11 @@ export async function sizeReport(key: string) {
     const nums = [...(ids.get("arrived") ?? [])].sort((x, y) => x - y).map((n) => `№ <code>${n}</code>`);
     out.push(`<b>У відділенні (ще не забрали):</b> ${sizesText(atBranch)}`, `   ${nums.join(", ")}`);
   }
+  const onWay = byState.get("transit");
+  if (onWay?.size) {
+    const nums = [...(ids.get("transit") ?? [])].sort((x, y) => x - y).map((n) => `№ <code>${n}</code>`);
+    out.push(`<b>В дорозі:</b> ${sizesText(onWay)}`, `   ${nums.join(", ")}`);
+  }
 
   // Продано за DAYS днів по розмірах: усі замовлення, крім скасованих і відмов, найходовіші першими.
   const sold = new Map<string, number>();
