@@ -17,6 +17,7 @@ type KOrder = {
   buyer?: { full_name?: string; phone?: string } | null;
   products?: { name?: string; properties?: { name: string; value: string }[] | null; offer?: { sku?: string } | null }[] | null;
   tags?: Named[] | null;
+  shipping?: { tracking_code?: string | null } | null;
 };
 type List<T> = T[] | { data: T[] };
 const rows = <T>(r: List<T>) => (Array.isArray(r) ? r : r.data);
@@ -28,7 +29,7 @@ function parseTime(v?: string) {
   return Date.parse(/[TZ+]/.test(v) ? v : v.replace(" ", "T") + "Z");
 }
 
-export type Refusal = { id: number; buyer: string; phone: string; status: string; items: string };
+export type Refusal = { id: number; buyer: string; phone: string; status: string; items: string; ttn: string };
 
 async function doneTagId() {
   const tags = rows(await request<List<Named>>("/order/tag?limit=50", fresh));
@@ -47,7 +48,7 @@ export async function refusals(hours = RECENT_HOURS): Promise<{ list: Refusal[];
   const tagId = await doneTagId();
   const orders = rows(
     await request<List<KOrder & { status_id: number }>>(
-      `/order?filter[status_id]=${matched.map((s) => s.id).join(",")}&include=buyer,products.offer,tags&sort=-id&limit=50`,
+      `/order?filter[status_id]=${matched.map((s) => s.id).join(",")}&include=buyer,products.offer,tags,shipping&sort=-id&limit=50`,
       fresh,
     ),
   );
@@ -64,6 +65,7 @@ export async function refusals(hours = RECENT_HOURS): Promise<{ list: Refusal[];
       buyer: o.buyer?.full_name?.trim() || "",
       phone: o.buyer!.phone!,
       status: names.get(o.status_id) ?? "",
+      ttn: o.shipping?.tracking_code?.trim() || "",
       items: (o.products ?? []).map((p) => p.offer?.sku || p.name || "").filter(Boolean).join(", "),
     }));
   return { list, statuses: matched.map((s) => s.name) };

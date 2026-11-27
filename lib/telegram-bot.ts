@@ -226,8 +226,9 @@ export async function autoRefusals(origin: string) {
 
 async function sendRefusal(r: Awaited<ReturnType<typeof refusals>>["list"][number], origin: string) {
     await send(
-      `<b>№${r.id}</b>${r.buyer ? ` · ${esc(r.buyer)}` : ""}\n📞 <code>${esc(r.phone)}</code>${r.items ? `\n👟 ${esc(r.items)}` : ""}\n\n<code>${esc(refusalText)}</code>`,
+      `<b>№${r.id}</b>${r.buyer ? ` · ${esc(r.buyer)}` : ""}${r.ttn ? `\nТТН: <code>${esc(r.ttn)}</code> · <a href="${/^\d{14}$/.test(r.ttn) ? `https://novaposhta.ua/tracking/?cargo_number=${r.ttn}` : `https://track.ukrposhta.ua/tracking_UA.html?barcode=${encodeURIComponent(r.ttn)}`}">відстежити</a>` : ""}\n📞 <code>${esc(r.phone)}</code>${r.items ? `\n👟 ${esc(r.items)}` : ""}\n\n<code>${esc(refusalText)}</code>`,
       {
+        link_preview_options: { is_disabled: true },
         reply_markup: {
           inline_keyboard: [
             messengerButtons(r.phone, origin),
