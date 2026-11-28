@@ -18,6 +18,7 @@ type KOrder = {
   products?: { name?: string; properties?: { name: string; value: string }[] | null; offer?: { sku?: string } | null }[] | null;
   tags?: Named[] | null;
   shipping?: { tracking_code?: string | null } | null;
+  manager_comment?: string | null;
 };
 type List<T> = T[] | { data: T[] };
 const rows = <T>(r: List<T>) => (Array.isArray(r) ? r : r.data);
@@ -69,6 +70,50 @@ export async function refusals(hours = RECENT_HOURS): Promise<{ list: Refusal[];
       items: (o.products ?? []).map((p) => p.offer?.sku || p.name || "").filter(Boolean).join(", "),
     }));
   return { list, statuses: matched.map((s) => s.name) };
+}
+
+// Відмови за останні 2 тижні в статусі «Відмова від отримання» (без фільтра за тегом).
+async function recentRefusalOrders() {
+  const all = rows(await request<List<Named>>("/order/status?limit=50", fresh));
+  const ids = all.filter((s) => REFUSAL_STATUS.test(s.name.trim())).map((s) => s.id);
+  if (!ids.length) return [];
+  const orders = rows(
+    await request<List<KOrder & { status_id: number }>>(
+      `/order?filter[status_id]=${ids.join(",")}&include=buyer,products.offer,tags,shipping&sort=-id&limit=50`,
+      fresh,
+    ),
+  );
+  const since = Date.now() - 14 * 86400_000;
+  return orders.filter((o) => {
+    const t = parseTime(o.updated_at);
+    return Number.isNaN(t) || t >= since;
+  });
+}
+
+const toRefusal = (o: KOrder) => ({
+  id: o.id,
+  buyer: o.buyer?.full_name?.trim() || "",
+  phone: o.buyer?.phone || "",
+  status: "",
+  items: (o.products ?? []).map((p) => p.offer?.sku || p.name || "").filter(Boolean).join(", "),
+  ttn: o.shipping?.tracking_code?.trim() || "",
+});
+const hasReason = (o: KOrder) => /Причина відмови:/i.test(o.manager_comment ?? "");
+
+/** Клієнту вже написали («Написав» поставив тег), а причину ще не записано. */
+export async function awaitingReason(): Promise<Refusal[]> {
+  const tagId = await doneTagId();
+  return (await recentRefusalOrders())
+    .filter((o) => (o.tags ?? []).some((t) => t.id === tagId) && !hasReason(o))
+    .map(toRefusal);
+}
+
+/** Пошук відмови за номером ТТН (Нова Пошта або Укрпошта). */
+export async function findRefusalByTtn(ttn: string): Promise<Refusal[]> {
+  const q = ttn.replace(/\s+/g, "").toUpperCase();
+  return (await recentRefusalOrders())
+    .filter((o) => (o.shipping?.tracking_code ?? "").replace(/\s+/g, "").toUpperCase() === q)
+    .map(toRefusal);
 }
 
 export async function markRefusalDone(orderId: number) {

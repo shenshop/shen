@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { esc, telegram } from "./telegram";
 import { buildPlan, MAX_MOVES, moveNewOrder, moveOrders, type PlannedOrder } from "./stock-check";
 import { customerText, markSent, messengerButtons, ordersToNotify, stats, STATUS_LISTS, type StatusListId } from "./ttn-notify";
-import { REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
+import { awaitingReason, findRefusalByTtn, REASONS, refusals, refusalText, saveRefusalReason } from "./refusals";
 import { pickupsWaiting, pickupText } from "./pickup-reminder";
 import { createManualOrder, parseManualOrder } from "./manual-order";
 import { autoSendPickups, autoSendTtns } from "./shop-bot-jobs";
@@ -203,10 +203,26 @@ export async function remindUnsentTtns() {
 
 // Відмови від отримання: текст для клієнта, кнопки месенджерів і «Написав» (тег у KeyCRM).
 export async function handleRefusals(origin: string) {
-  const { list, statuses } = await refusals();
-  if (!list.length) return send(`↩️ Нових відмов немає (статуси: ${esc(statuses.join(", "))}).`);
-  await send(`↩️ <b>Відмови від отримання: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber, Telegram або WhatsApp і вставте.`);
-  for (const r of list) await sendRefusal(r, origin);
+  const [{ list, statuses }, waiting] = await Promise.all([refusals(), awaitingReason()]);
+  if (!list.length) await send(`↩️ Нових відмов немає (статуси: ${esc(statuses.join(", "))}).`);
+  else {
+    await send(`↩️ <b>Відмови від отримання: ${list.length}</b>\nТоркніться тексту, щоб скопіювати, відкрийте Viber, Telegram або WhatsApp і вставте.`);
+    for (const r of list) await sendRefusal(r, origin);
+  }
+  if (!waiting.length) return;
+  await send(`⏳ <b>Чекають причину: ${waiting.length}</b>\nКлієнту вже написали. Натисніть причину або напишіть боту ТТН і причину, наприклад:\n<code>20451234567890 великі</code>`);
+  for (const r of waiting) {
+    await send(`<b>№${r.id}</b>${r.buyer ? ` · ${esc(r.buyer)}` : ""}${r.ttn ? `\nТТН: <code>${esc(r.ttn)}</code>` : ""}${r.items ? `\n👟 ${esc(r.items)}` : ""}`, {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            ...Object.entries(REASONS).map(([code, label]) => ({ text: label, callback_data: `why:${r.id}:${code}` })),
+            { text: "✍️ Своя", callback_data: `why:${r.id}:own` },
+          ],
+        ],
+      },
+    });
+  }
 }
 
 // Кожні 15 хвилин: нові «Відмова від отримання» бот надсилає сам, кожну один раз.
@@ -276,6 +292,28 @@ export async function handleReasonButton(orderId: number, code: string) {
   }
   const reason = REASONS[code];
   if (reason) await handleReasonText(orderId, reason);
+}
+
+// «20451234567890 великі» — ТТН і причина: бот знаходить відмову за ТТН і записує причину в KeyCRM.
+const TTN_REASON = /^\s*(?:відмова\s+)?(\d{14}|\d{13}|[A-Z]{2}\d{9}[A-Z]{2})[\s,.:—-]+(.+)$/is;
+export const looksLikeTtnReason = (text: string) => TTN_REASON.test(text.trim());
+
+function normalizeReason(r: string) {
+  const t = r.trim().replace(/[.!]+$/, "");
+  if (/^мал/i.test(t)) return "Малі";
+  if (/^велик/i.test(t)) return "Великі";
+  if (/^не\s*сподоб/i.test(t)) return "Не сподобались";
+  return t;
+}
+
+export async function handleTtnReason(text: string) {
+  const [, ttn, rest] = text.trim().match(TTN_REASON)!;
+  const found = await findRefusalByTtn(ttn);
+  if (!found.length) return send(`⚠️ Не знайшов відмову з ТТН <code>${esc(ttn)}</code> за останні 2 тижні. Перевірте номер.`);
+  const r = found[0];
+  const reason = normalizeReason(rest);
+  await saveRefusalReason(r.id, reason);
+  await send(`📝 №${r.id}${r.buyer ? ` · ${esc(r.buyer)}` : ""}: записав у KeyCRM «Причина відмови: ${esc(reason)}».`);
 }
 
 export async function handleReasonText(orderId: number, reason: string) {

@@ -7,7 +7,7 @@ import { looksLikeOrder } from "@/lib/manual-order";
 import { relayOwnerReply } from "@/lib/shop-bot";
 import { handleSupplierAdd, handleSupplierDelete, handleSupplierDeleteAsk, handleSupplierHistory, handleSupplierPreview, handleSuppliers, handleSuppliersCsv, looksLikeSupplierEntry, SUPPLIERS_BUTTON } from "@/lib/suppliers";
 import { looksLikeProduct, photoUpdateSku, rememberPhoto } from "@/lib/new-product";
-import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleRefusals, handleSent, handleSizeModels, handleSizeReport, handleTtnList, STATUS_BUTTONS, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, SIZES_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
+import { CHECK_BUTTON, handleCheck, handleMove, handleMoveNew, handleManualCreate, handleManualPreview, handleProductCreate, handleProductPreview, handlePhotoPreview, handlePhotoReplace, handlePickups, handleReasonButton, handleReasonText, handleRefresh, handleTtnReason, looksLikeTtnReason, handleRefusals, handleSent, handleSizeModels, handleSizeReport, handleTtnList, STATUS_BUTTONS, KEYBOARD, PICKUP_BUTTON, REASON_PROMPT, REFRESH_BUTTON, REFUSALS_BUTTON, SIZES_BUTTON, TTN_BUTTON, webhookSecret } from "@/lib/telegram-bot";
 
 export const dynamic = "force-dynamic";
 
@@ -154,6 +154,7 @@ export async function POST(req: Request) {
       else if (Object.hasOwn(STATUS_BUTTONS, text)) await handleTtnList(new URL(req.url).origin, STATUS_BUTTONS[text]);
       else if (text === REFUSALS_BUTTON || text.startsWith("/vidmovy")) await handleRefusals(new URL(req.url).origin);
       else if (text === SUPPLIERS_BUTTON || text.startsWith("/postachalnyky")) await handleSuppliers();
+      else if (looksLikeTtnReason(text)) await handleTtnReason(text);
       else if (looksLikeSupplierEntry(text)) await handleSupplierPreview(text, update.message!.message_id);
       else if (looksLikeProduct(text)) await handleProductPreview(text, update.message!.message_id, null);
       else if (looksLikeOrder(text)) await handleManualPreview(text, update.message!.message_id);
