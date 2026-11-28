@@ -34,7 +34,6 @@ export const KEYBOARD = {
     [{ text: REFRESH_BUTTON }],
   ],
   resize_keyboard: true,
-  is_persistent: true,
 };
 
 // Секрет вебхука виводимо з токена бота, щоб не заводити ще одну змінну в Cloudflare.
